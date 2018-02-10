@@ -124,3 +124,22 @@ void kfusion::cuda::ColorVolume::fetchColors(const DeviceArray<Point>& cloud,
     device::ColorVolume volume((uchar4*)data_.ptr<uchar4>(), dims, vsz, trunc_dist_, max_weight_);
     device::fetchColors(volume, aff_inv, pts, col);
 }
+
+// void kfusion::cuda::ColorVolume::raycast(const Affine3f& camera_pose, const Intr& intr, Cloud& colors)
+// {
+//     device::Points& c = (device::Points&)colors;
+
+//     Affine3f cam2vol = pose_.inv() * camera_pose;
+
+//     device::Aff3f aff = device_cast<device::Aff3f>(cam2vol);
+//     device::Mat3f Rinv = device_cast<device::Mat3f>(cam2vol.rotation().inv(cv::DECOMP_SVD));
+
+//     device::Reprojector reproj(intr.fx, intr.fy, intr.cx, intr.cy);
+
+//     device::Vec3i dims = device_cast<device::Vec3i>(dims_);
+//     device::Vec3f vsz  = device_cast<device::Vec3f>(getVoxelSize());
+
+//     device::ColorVolume color_volume((uchar4*)data_.ptr<uchar4>(), dims, vsz, trunc_dist_, max_weight_);
+//     // device::TsdfVolume tsdf_volume(data_.ptr<ushort2>(), dims, vsz, trunc_dist_, max_weight_);
+//     // device::raycast(color_volume, tsdf_volume, aff, Rinv, reproj, c, raycast_step_factor_, gradient_delta_factor_);
+// }

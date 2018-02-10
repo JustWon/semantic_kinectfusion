@@ -2,6 +2,7 @@
 
 #include <kfusion/cuda/device_array.hpp>
 #include "safe_call.hpp"
+#include "kfusion/types.hpp"
 
 namespace kfusion
 {
@@ -132,7 +133,7 @@ namespace kfusion
                      const Reprojector& reproj, Depth& depth, Normals& normals, float step_factor, float delta_factor);
 
         void raycast(const TsdfVolume& volume, const Aff3f& aff, const Mat3f& Rinv,
-                     const Reprojector& reproj, Points& points, Normals& normals, float step_factor, float delta_factor);
+                     const Reprojector& reproj, Points& points, Normals& normals, Image& colors, float step_factor, float delta_factor, const uchar4* color_vol_data);
 
         __kf_device__ ushort2 pack_tsdf(float tsdf, int weight);
         __kf_device__ float unpack_tsdf(ushort2 value, int& weight);
@@ -142,6 +143,9 @@ namespace kfusion
         void clear_volume(ColorVolume volume);
         void integrate(const Colors& image, const Dists& depth_map, ColorVolume& volume, const Aff3f& aff, const Projector& proj);
         void fetchColors(const ColorVolume& volume, const Aff3f& aff_inv, const PtrSz<Point>& points, PtrSz<Color>& colors);
+
+        void raycast(const ColorVolume& color_volume, const TsdfVolume& tsdf_volume, const Aff3f& aff, const Mat3f& Rinv, 
+            const Reprojector& reproj, Points& colors, float raycaster_step_factor, float gradient_delta_factor);
 
         //image proc functions
         void compute_dists(const Depth& depth, Dists dists, float2 f, float2 c);
@@ -159,6 +163,7 @@ namespace kfusion
         void renderImage(const Depth& depth, const Normals& normals, const Reprojector& reproj, const Vec3f& light_pose, Image& image);
         void renderImage(const Points& points, const Normals& normals, const Reprojector& reproj, const Vec3f& light_pose, Image& image);
         void renderTangentColors(const Normals& normals, Image& image);
+        void renderColors(const Image& in_image);
 
         //exctraction functionality
         size_t extractCloud(const TsdfVolume& volume, const Aff3f& aff, PtrSz<Point> output);

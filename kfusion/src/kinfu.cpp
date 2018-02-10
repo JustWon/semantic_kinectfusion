@@ -1,5 +1,7 @@
 #include "precomp.hpp"
 #include "internal.hpp"
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 
 using namespace std;
 using namespace kfusion;
@@ -129,6 +131,9 @@ void kfusion::KinFu::allocate_buffers()
     curr_.points_pyr.resize(LEVELS);
     prev_.points_pyr.resize(LEVELS);
 
+    curr_.colors_pyr.resize(LEVELS);
+    prev_.colors_pyr.resize(LEVELS);
+
     for(int i = 0; i < LEVELS; ++i)
     {
         curr_.depth_pyr[i].create(rows, cols);
@@ -140,6 +145,9 @@ void kfusion::KinFu::allocate_buffers()
         curr_.points_pyr[i].create(rows, cols);
         prev_.points_pyr[i].create(rows, cols);
 
+        curr_.colors_pyr[i].create(rows, cols);
+        prev_.colors_pyr[i].create(rows, cols);
+
         cols /= 2;
         rows /= 2;
     }
@@ -147,6 +155,7 @@ void kfusion::KinFu::allocate_buffers()
     depths_.create(params_.rows, params_.cols);
     normals_.create(params_.rows, params_.cols);
     points_.create(params_.rows, params_.cols);
+    colors_.create(params_.rows, params_.cols);
 }
 
 void kfusion::KinFu::reset()
@@ -195,6 +204,7 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
         tsdf_volume_->integrate(dists_, poses_.back(), p.intr);
         curr_.points_pyr.swap(prev_.points_pyr);
         curr_.normals_pyr.swap(prev_.normals_pyr);
+        curr_.colors_pyr.swap(prev_.colors_pyr);
         return ++frame_counter_, false;
     }
 
@@ -231,7 +241,7 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
     // Ray casting
     {
         //ScopeTime time("ray-cast-all");
-        tsdf_volume_->raycast(poses_.back(), p.intr, prev_.points_pyr[0], prev_.normals_pyr[0]);
+        tsdf_volume_->raycast(poses_.back(), p.intr, prev_.points_pyr[0], prev_.normals_pyr[0], prev_.colors_pyr[0], *color_volume_);
         for (int i = 1; i < LEVELS; ++i)
             resizePointsNormals(prev_.points_pyr[i-1], prev_.normals_pyr[i-1], prev_.points_pyr[i], prev_.normals_pyr[i]);
         cuda::waitAllDefaultStream();
@@ -253,9 +263,18 @@ void kfusion::KinFu::renderImage(cuda::Image& image, int flag)
     {
         DeviceArray2D<RGB> i1(p.rows, p.cols, image.ptr(), image.step());
         DeviceArray2D<RGB> i2(p.rows, p.cols, image.ptr() + p.cols, image.step());
+        // DeviceArray2D<RGB> i3(p.rows, p.cols, image.ptr() + 2*p.cols, image.step());
 
         cuda::renderImage(prev_.points_pyr[0], prev_.normals_pyr[0], params_.intr, params_.light_pose, i1);
         cuda::renderTangentColors(prev_.normals_pyr[0], i2);
+        // cuda::renderColors(prev_.colors_pyr[0]);
+
+        cv::Mat color_host(480, 640, CV_8UC4);
+        prev_.colors_pyr[0].download(color_host.ptr<RGB>(), 640*4);
+
+        cv::Mat color_host2(480, 640, CV_8UC3);
+        cvtColor(color_host, color_host2, CV_BGRA2BGR);
+        cv::imshow("test", color_host2);
     }
 }
 
@@ -267,8 +286,9 @@ void kfusion::KinFu::renderImage(cuda::Image& image, const Affine3f& pose, int f
     depths_.create(p.rows, p.cols);
     normals_.create(p.rows, p.cols);
     points_.create(p.rows, p.cols);
+    colors_.create(p.rows, p.cols);
 
-    tsdf_volume_->raycast(pose, p.intr, points_, normals_);
+    tsdf_volume_->raycast(pose, p.intr, points_, normals_, colors_, *color_volume_);
 
     if (flag < 1 || flag > 3)
         cuda::renderImage(points_, normals_, params_.intr, params_.light_pose, image);

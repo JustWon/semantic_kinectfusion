@@ -180,6 +180,9 @@ namespace kfusion
              */
             void fetchColors(const DeviceArray<Point>& cloud, DeviceArray<RGB>& colors) const;
 
+            // virtual void raycast(const Affine3f& camera_pose, const TsdfVolume& tsdf_volume, const Intr& intr, Cloud& colors);
+
+
         private:
 
 #pragma mark -
@@ -197,6 +200,9 @@ namespace kfusion
             Vec3f size_;
             /**< The pose of the volume in the world */
             Affine3f pose_;
+
+            float gradient_delta_factor_;
+            float raycast_step_factor_;
         };
     }
 }

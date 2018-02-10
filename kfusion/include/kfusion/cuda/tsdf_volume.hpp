@@ -1,6 +1,7 @@
 #pragma once
 
 #include <kfusion/types.hpp>
+#include <kfusion/cuda/color_volume.hpp>
 
 namespace kfusion
 {
@@ -45,7 +46,7 @@ namespace kfusion
             virtual void applyAffine(const Affine3f& affine);
             virtual void integrate(const Dists& dists, const Affine3f& camera_pose, const Intr& intr);
             virtual void raycast(const Affine3f& camera_pose, const Intr& intr, Depth& depth, Normals& normals);
-            virtual void raycast(const Affine3f& camera_pose, const Intr& intr, Cloud& points, Normals& normals);
+            virtual void raycast(const Affine3f& camera_pose, const Intr& intr, Cloud& points, Normals& normals, Image& colors, const cuda::ColorVolume& _color_volume);
 
             void swap(CudaData& data);
 

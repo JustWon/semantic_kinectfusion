@@ -107,10 +107,11 @@ void kfusion::cuda::TsdfVolume::raycast(const Affine3f& camera_pose, const Intr&
 
 }
 
-void kfusion::cuda::TsdfVolume::raycast(const Affine3f& camera_pose, const Intr& intr, Cloud& points, Normals& normals)
+void kfusion::cuda::TsdfVolume::raycast(const Affine3f& camera_pose, const Intr& intr, Cloud& points, Normals& normals, Image& colors, const cuda::ColorVolume& _color_volume)
 {
     device::Normals& n = (device::Normals&)normals;
     device::Points& p = (device::Points&)points;
+    device::Image& c = (device::Image&)colors;
 
     Affine3f cam2vol = pose_.inv() * camera_pose;
 
@@ -123,7 +124,7 @@ void kfusion::cuda::TsdfVolume::raycast(const Affine3f& camera_pose, const Intr&
     device::Vec3f vsz  = device_cast<device::Vec3f>(getVoxelSize());
 
     device::TsdfVolume volume(data_.ptr<ushort2>(), dims, vsz, trunc_dist_, max_weight_);
-    device::raycast(volume, aff, Rinv, reproj, p, n, raycast_step_factor_, gradient_delta_factor_);
+    device::raycast(volume, aff, Rinv, reproj, p, n, c, raycast_step_factor_, gradient_delta_factor_, _color_volume.data().ptr<uchar4>());
 }
 
 DeviceArray<Point> kfusion::cuda::TsdfVolume::fetchCloud(DeviceArray<Point>& cloud_buffer) const

@@ -67,6 +67,7 @@ namespace kfusion
             std::vector<Depth> depth_pyr;
             std::vector<Cloud> points_pyr;
             std::vector<Normals> normals_pyr;
+            std::vector<Image> colors_pyr;
         };
     }
 

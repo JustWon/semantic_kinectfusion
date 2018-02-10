@@ -88,7 +88,7 @@ namespace kfusion
                         bool update = false;
                         // Check the distance
                         float sdf = Dp - sqrt(dot(vc, vc)); //Dp - norm(v)
-                        update = sdf > -volume.trunc_dist && sdf < volume.trunc_dist;
+                        update = (sdf > -volume.trunc_dist) && (sdf < volume.trunc_dist);
                         if (update)
                         {
                             // Read the existing value and weight
@@ -143,13 +143,13 @@ void kfusion::device::integrate(const PtrStepSz<uchar4>& rgb_image,
     image_tex.addressMode[1] = cudaAddressModeBorder;
     image_tex.addressMode[2] = cudaAddressModeBorder;
     cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<uchar4>();
-    TextureBinder image_binder(rgb_image, image_tex, channelDesc); (void)image_binder;
+    TextureBinder image_binder(rgb_image, image_tex, channelDesc);// (void)image_binder;
 
     depth_tex.filterMode = cudaFilterModePoint;
     depth_tex.addressMode[0] = cudaAddressModeBorder;
     depth_tex.addressMode[1] = cudaAddressModeBorder;
     depth_tex.addressMode[2] = cudaAddressModeBorder;
-    TextureBinder depth_binder(depth_map, depth_tex, cudaCreateChannelDescHalf()); (void)depth_binder;
+    TextureBinder depth_binder(depth_map, depth_tex, cudaCreateChannelDescHalf());// (void)depth_binder;
 
     dim3 block(32, 8);
     dim3 grid(divUp(volume.dims.x, block.x), divUp(volume.dims.y, block.y));
@@ -223,3 +223,167 @@ kfusion::device::fetchColors(const ColorVolume& volume, const Aff3f& aff_inv, co
     cudaSafeCall ( cudaGetLastError () );
     cudaSafeCall (cudaDeviceSynchronize ());
 };
+
+// ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// /// Volume ray casting
+
+// namespace kfusion
+// {
+//     namespace device
+//     {
+//         __kf_device__ void intersect(float3 ray_org, float3 ray_dir, /*float3 box_min,*/ float3 box_max, float &tnear, float &tfar)
+//         {
+//             const float3 box_min = make_float3(0.f, 0.f, 0.f);
+
+//             // compute intersection of ray with all six bbox planes
+//             float3 invR = make_float3(1.f/ray_dir.x, 1.f/ray_dir.y, 1.f/ray_dir.z);
+//             float3 tbot = invR * (box_min - ray_org);
+//             float3 ttop = invR * (box_max - ray_org);
+
+//             // re-order intersections to find smallest and largest on each axis
+//             float3 tmin = make_float3(fminf(ttop.x, tbot.x), fminf(ttop.y, tbot.y), fminf(ttop.z, tbot.z));
+//             float3 tmax = make_float3(fmaxf(ttop.x, tbot.x), fmaxf(ttop.y, tbot.y), fmaxf(ttop.z, tbot.z));
+
+//             // find the largest tmin and the smallest tmax
+//             tnear = fmaxf(fmaxf(tmin.x, tmin.y), fmaxf(tmin.x, tmin.z));
+//             tfar  = fminf(fminf(tmax.x, tmax.y), fminf(tmax.x, tmax.z));
+//         }
+
+//         template<typename Vol>
+//         __kf_device__ float interpolate(const Vol& volume, const float3& p_voxels)
+//         {
+//             float3 cf = p_voxels;
+
+//             //rounding to negative infinity
+//             int3 g = make_int3(__float2int_rd (cf.x), __float2int_rd (cf.y), __float2int_rd (cf.z));
+
+//             if (g.x < 0 || g.x >= volume.dims.x - 1 || g.y < 0 || g.y >= volume.dims.y - 1 || g.z < 0 || g.z >= volume.dims.z - 1)
+//                 return numeric_limits<float>::quiet_NaN();
+
+//             float a = cf.x - g.x;
+//             float b = cf.y - g.y;
+//             float c = cf.z - g.z;
+
+//             float tsdf = 0.f;
+//             tsdf += unpack_tsdf(*volume(g.x + 0, g.y + 0, g.z + 0)) * (1 - a) * (1 - b) * (1 - c);
+//             tsdf += unpack_tsdf(*volume(g.x + 0, g.y + 0, g.z + 1)) * (1 - a) * (1 - b) *      c;
+//             tsdf += unpack_tsdf(*volume(g.x + 0, g.y + 1, g.z + 0)) * (1 - a) *      b  * (1 - c);
+//             tsdf += unpack_tsdf(*volume(g.x + 0, g.y + 1, g.z + 1)) * (1 - a) *      b  *      c;
+//             tsdf += unpack_tsdf(*volume(g.x + 1, g.y + 0, g.z + 0)) *      a  * (1 - b) * (1 - c);
+//             tsdf += unpack_tsdf(*volume(g.x + 1, g.y + 0, g.z + 1)) *      a  * (1 - b) *      c;
+//             tsdf += unpack_tsdf(*volume(g.x + 1, g.y + 1, g.z + 0)) *      a  *      b  * (1 - c);
+//             tsdf += unpack_tsdf(*volume(g.x + 1, g.y + 1, g.z + 1)) *      a  *      b  *      c;
+//             return tsdf;
+//         }
+
+//         struct ColorRaycaster
+//         {
+//             ColorVolume color_volume;
+//             TsdfVolume tsdf_volume;
+
+//             Aff3f aff;
+//             Mat3f Rinv;
+
+//             Vec3f volume_size;
+//             Reprojector reproj;
+//             float time_step;
+//             float3 gradient_delta;
+//             float3 voxel_size_inv;
+
+//             ColorRaycaster(const ColorVolume& color_volume, const TsdfVolume& volume, const Aff3f& aff, const Mat3f& Rinv, const Reprojector& _reproj);
+
+//             __kf_device__
+//             float fetch_tsdf(const float3& p) const
+//             {
+//                 //rounding to nearest even
+//                 int x = __float2int_rn (p.x * voxel_size_inv.x);
+//                 int y = __float2int_rn (p.y * voxel_size_inv.y);
+//                 int z = __float2int_rn (p.z * voxel_size_inv.z);
+//                 return unpack_tsdf(*tsdf_volume(x, y, z));
+//             }
+
+//             __kf_device__
+//             void operator()(PtrStepSz<Point> colors) const
+//             {
+//                 int x = blockIdx.x * blockDim.x + threadIdx.x;
+//                 int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+//                 if (x >= colors.cols || y >= colors.rows)
+//                     return;
+
+//                 const float qnan = numeric_limits<float>::quiet_NaN();
+
+//                 colors(y, x) = make_float4(qnan, qnan, qnan, qnan);
+
+//                 float3 ray_org = aff.t;
+//                 float3 ray_dir = normalized( aff.R * reproj(x, y, 1.f) );
+
+//                 // We do subtract voxel size to minimize checks after
+//                 // Note: origin of volume coordinate is placeed
+//                 // in the center of voxel (0,0,0), not in the corener of the voxel!
+//                 float3 box_max = volume_size - tsdf_volume.voxel_size;
+
+//                 float tmin, tmax;
+//                 intersect(ray_org, ray_dir, box_max, tmin, tmax);
+
+//                 const float min_dist = 0.f;
+//                 tmin = fmax(min_dist, tmin);
+//                 if (tmin >= tmax)
+//                     return;
+
+//                 tmax -= time_step;
+//                 float3 vstep = ray_dir * time_step;
+//                 float3 next = ray_org + ray_dir * tmin;
+
+//                 float tsdf_next = fetch_tsdf(next);
+//                 for (float tcurr = tmin; tcurr < tmax; tcurr += time_step)
+//                 {
+//                     float tsdf_curr = tsdf_next;
+//                     float3     curr = next;
+//                     next += vstep;
+
+//                     tsdf_next = fetch_tsdf(next);
+//                     if (tsdf_curr < 0.f && tsdf_next > 0.f)
+//                         break;
+
+//                     if (tsdf_curr > 0.f && tsdf_next < 0.f)
+//                     {
+//                         float Ft   = interpolate(tsdf_volume, curr * voxel_size_inv);
+//                         float Ftdt = interpolate(tsdf_volume, next * voxel_size_inv);
+
+//                         float Ts = tcurr - __fdividef(time_step * Ft, Ftdt - Ft);
+
+//                         float3 vertex = ray_org + ray_dir * Ts;
+
+//                         colors(y, x) = make_float4(1,1,1,0);
+//                         break;
+//                     }
+//                 } /* for (;;) */
+//             }
+//         };
+
+//         inline ColorRaycaster::ColorRaycaster(const ColorVolume& color_volume, const TsdfVolume& tsdf_volume, const Aff3f& _aff, const Mat3f& _Rinv, const Reprojector& _reproj)
+//             : color_volume(color_volume), tsdf_volume(tsdf_volume), aff(_aff), Rinv(_Rinv), reproj(_reproj) {}
+
+//         __global__ void raycast_kernel(const ColorRaycaster raycaster, PtrStepSz<Point> colors)
+//         { raycaster(colors); };
+
+//     }
+// }
+
+// void kfusion::device::raycast(const ColorVolume& color_volume, const TsdfVolume& tsdf_volume, const Aff3f& aff, const Mat3f& Rinv, const Reprojector& reproj,
+//                               Points& colors, float raycaster_step_factor, float gradient_delta_factor)
+// {
+//     ColorRaycaster rc(color_volume, tsdf_volume, aff, Rinv, reproj);
+
+//     rc.volume_size = color_volume.voxel_size * color_volume.dims;
+//     rc.time_step = color_volume.trunc_dist * raycaster_step_factor;
+//     rc.gradient_delta = color_volume.voxel_size * gradient_delta_factor;
+//     rc.voxel_size_inv = 1.f/color_volume.voxel_size;
+
+//     dim3 block(32, 8);
+//     dim3 grid (divUp (colors.cols(), block.x), divUp (colors.rows(), block.y));
+
+//     // raycast_kernel<<<grid, block>>>(rc, (PtrStepSz<Point>)colors);
+//     // cudaSafeCall (cudaGetLastError ());
+// }

@@ -561,6 +561,43 @@ void kfusion::device::renderTangentColors(const Normals& normals, Image& image)
     cudaSafeCall ( cudaGetLastError () );
 }
 
+namespace kfusion
+{
+    namespace device
+    {
+        __global__ void colors_kernel(PtrStepSz<uchar4> in_colors, PtrStep<uchar4> out_colors)
+        {
+            int x = threadIdx.x + blockIdx.x * blockDim.x;
+            int y = threadIdx.y + blockIdx.y * blockDim.y;
+
+            if (x >= in_colors.cols || y >= in_colors.rows)
+                return;
+
+            uchar4 c = in_colors(y, x);
+
+        #if 0
+            unsigned char r = static_cast<unsigned char>(__saturatef((-n.x + 1.f)/2.f) * 255.f);
+            unsigned char g = static_cast<unsigned char>(__saturatef((-n.y + 1.f)/2.f) * 255.f);
+            unsigned char b = static_cast<unsigned char>(__saturatef((-n.z + 1.f)/2.f) * 255.f);
+        #else
+            unsigned char r = static_cast<unsigned char>((5.f - c.x * 3.5f) * 25.5f);
+            unsigned char g = static_cast<unsigned char>((5.f - c.y * 2.5f) * 25.5f);
+            unsigned char b = static_cast<unsigned char>((5.f - c.z * 3.5f) * 25.5f);
+        #endif
+            out_colors(y, x) = make_uchar4(b, g, r, 0);
+        }
+    }
+}
+
+void kfusion::device::renderColors(const Image& in_image)
+{
+    // dim3 block (32, 8);
+    // dim3 grid (divUp (in_image.cols(), block.x), divUp (in_image.rows(), block.y));
+
+    // colors_kernel<<<grid, block>>>(in_image, out_image);
+    // cudaSafeCall ( cudaGetLastError () );
+}
+
 
 namespace kfusion
 {

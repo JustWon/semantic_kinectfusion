@@ -183,6 +183,19 @@ namespace kfusion
             return tsdf;
         }
 
+        __kf_device__ uchar4 color_data(const uchar4* color_vol_data, const float3& p_voxels)
+        {
+            float3 cf = p_voxels;
+
+            //rounding to negative infinity
+            int3 g = make_int3(__float2int_rd (cf.x), __float2int_rd (cf.y), __float2int_rd (cf.z));
+
+            if (g.x < 0 || g.x >= 512 - 1 || g.y < 0 || g.y >= 512 - 1 || g.z < 0 || g.z >= 512 - 1)
+                return make_uchar4(0,0,0,0);
+
+            return *(color_vol_data + g.x + g.y*512 + g.z*512*512);
+        }
+
         struct TsdfRaycaster
         {
             TsdfVolume volume;
@@ -277,7 +290,7 @@ namespace kfusion
             }
 
             __kf_device__
-            void operator()(PtrStepSz<Point> points, PtrStep<Normal> normals) const
+            void operator()(PtrStepSz<Point> points, PtrStep<Normal> normals, PtrStepSz<Color> colors, const uchar4* color_vol_data) const
             {
                 int x = blockIdx.x * blockDim.x + threadIdx.x;
                 int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -288,6 +301,7 @@ namespace kfusion
                 const float qnan = numeric_limits<float>::quiet_NaN();
 
                 points(y, x) = normals(y, x) = make_float4(qnan, qnan, qnan, qnan);
+                colors(y, x) = make_uchar4(qnan,qnan,qnan,qnan);
 
                 float3 ray_org = aff.t;
                 float3 ray_dir = normalized( aff.R * reproj(x, y, 1.f) );
@@ -320,7 +334,7 @@ namespace kfusion
                     if (tsdf_curr < 0.f && tsdf_next > 0.f)
                         break;
 
-                    if (tsdf_curr > 0.f && tsdf_next < 0.f)
+                    if (tsdf_curr > 0.f && tsdf_next < 0.f) // zero crossing
                     {
                         float Ft   = interpolate(volume, curr * voxel_size_inv);
                         float Ftdt = interpolate(volume, next * voxel_size_inv);
@@ -337,6 +351,7 @@ namespace kfusion
 
                             normals(y, x) = make_float4(normal.x, normal.y, normal.z, 0.f);
                             points(y, x) = make_float4(vertex.x, vertex.y, vertex.z, 0.f);
+                            colors(y, x) = color_data(color_vol_data, curr * voxel_size_inv);//make_uchar4(100,0,0,100);
                         }
                         break;
                     }
@@ -371,8 +386,8 @@ namespace kfusion
         __global__ void raycast_kernel(const TsdfRaycaster raycaster, PtrStepSz<ushort> depth, PtrStep<Normal> normals)
         { raycaster(depth, normals); };
 
-        __global__ void raycast_kernel(const TsdfRaycaster raycaster, PtrStepSz<Point> points, PtrStep<Normal> normals)
-        { raycaster(points, normals); };
+        __global__ void raycast_kernel(const TsdfRaycaster raycaster, PtrStepSz<Point> points, PtrStep<Normal> normals, PtrStepSz<Color> colors, const uchar4* color_vol_data)
+        { raycaster(points, normals, colors, color_vol_data); };
 
     }
 }
@@ -396,7 +411,7 @@ void kfusion::device::raycast(const TsdfVolume& volume, const Aff3f& aff, const 
 
 
 void kfusion::device::raycast(const TsdfVolume& volume, const Aff3f& aff, const Mat3f& Rinv, const Reprojector& reproj,
-                              Points& points, Normals& normals, float raycaster_step_factor, float gradient_delta_factor)
+                              Points& points, Normals& normals, Image& colors, float raycaster_step_factor, float gradient_delta_factor, const uchar4* color_vol_data)
 {
     TsdfRaycaster rc(volume, aff, Rinv, reproj);
 
@@ -408,7 +423,7 @@ void kfusion::device::raycast(const TsdfVolume& volume, const Aff3f& aff, const 
     dim3 block(32, 8);
     dim3 grid (divUp (points.cols(), block.x), divUp (points.rows(), block.y));
 
-    raycast_kernel<<<grid, block>>>(rc, (PtrStepSz<Point>)points, normals);
+    raycast_kernel<<<grid, block>>>(rc, (PtrStepSz<Point>)points, normals, colors, color_vol_data);
     cudaSafeCall (cudaGetLastError ());
 }
 

@@ -97,6 +97,7 @@ namespace kfusion
         cuda::Cloud points_;
         cuda::Normals normals_;
         cuda::Depth depths_;
+        cuda::Image colors_;
 
         cv::Ptr<cuda::TsdfVolume> tsdf_volume_;
         cv::Ptr<cuda::ColorVolume> color_volume_;
