@@ -43,40 +43,6 @@ namespace kfusion
             float y = z * (v - c.y) * finv.y;
             return make_float3(x, y, z);
         }
-
-#if defined USE_DEPTH
-        __kf_device__
-        int ComputeIcpHelper::find_coresp(int x, int y, float3& nd, float3& d, float3& s) const
-        {
-            int src_z = dcurr(y, x);
-            if (src_z == 0)
-                return 40;
-
-            s = aff * reproj(x, y, src_z * 0.001f);
-
-            float2 coo = proj(s);
-            if (s.z <= 0 || coo.x < 0 || coo.y < 0 || coo.x >= cols || coo.y >= rows)
-                return 80;
-
-            int dst_z = tex2D(dprev_tex, coo.x, coo.y);
-            if (dst_z == 0)
-                return 120;
-
-            d = reproj(coo.x, coo.y, dst_z * 0.001f);
-
-            float dist2 = norm_sqr(s - d);
-            if (dist2 > dist2_thres)
-                return 160;
-
-            float3 ns = aff.R * tr(ncurr(y, x));
-            nd = tr(tex2D(nprev_tex, coo.x, coo.y));
-
-            float cosine = fabs(dot(ns, nd));
-            if (cosine < min_cosine)
-                return 200;
-            return 0;
-        }
-#else
         __kf_device__
         int ComputeIcpHelper::find_coresp(int x, int y, float3& nd, float3& d, float3& s) const
         {
@@ -106,7 +72,6 @@ namespace kfusion
                 return 200;
             return 0;
         }
-#endif
 
         __kf_device__
         void ComputeIcpHelper::partial_reduce(const float row[7], PtrStep<float>& partial_buf) const

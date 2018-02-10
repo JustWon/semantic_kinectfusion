@@ -185,11 +185,7 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
         cuda::depthBuildPyramid(curr_.depth_pyr[i-1], curr_.depth_pyr[i], p.bilateral_sigma_depth);
 
     for (int i = 0; i < LEVELS; ++i)
-#if defined USE_DEPTH
-        cuda::computeNormalsAndMaskDepth(p.intr(i), curr_.depth_pyr[i], curr_.normals_pyr[i]);
-#else
         cuda::computePointNormals(p.intr(i), curr_.depth_pyr[i], curr_.points_pyr[i], curr_.normals_pyr[i]);
-#endif
 
     cuda::waitAllDefaultStream();
 
@@ -197,11 +193,7 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
     if (frame_counter_ == 0)
     {
         tsdf_volume_->integrate(dists_, poses_.back(), p.intr);
-#if defined USE_DEPTH
-        curr_.depth_pyr.swap(prev_.depth_pyr);
-#else
         curr_.points_pyr.swap(prev_.points_pyr);
-#endif
         curr_.normals_pyr.swap(prev_.normals_pyr);
         return ++frame_counter_, false;
     }
@@ -211,11 +203,8 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
     Affine3f affine; // cuur -> prev
     {
         //ScopeTime time("icp");
-#if defined USE_DEPTH
-        bool ok = icp_->estimateTransform(affine, p.intr, curr_.depth_pyr, curr_.normals_pyr, prev_.depth_pyr, prev_.normals_pyr);
-#else
         bool ok = icp_->estimateTransform(affine, p.intr, curr_.points_pyr, curr_.normals_pyr, prev_.points_pyr, prev_.normals_pyr);
-#endif
+
         if (!ok)
             return reset(), false;
     }
@@ -242,15 +231,9 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
     // Ray casting
     {
         //ScopeTime time("ray-cast-all");
-#if defined USE_DEPTH
-        volume_->raycast(poses_.back(), p.intr, prev_.depth_pyr[0], prev_.normals_pyr[0]);
-        for (int i = 1; i < LEVELS; ++i)
-            resizeDepthNormals(prev_.depth_pyr[i-1], prev_.normals_pyr[i-1], prev_.depth_pyr[i], prev_.normals_pyr[i]);
-#else
         tsdf_volume_->raycast(poses_.back(), p.intr, prev_.points_pyr[0], prev_.normals_pyr[0]);
         for (int i = 1; i < LEVELS; ++i)
             resizePointsNormals(prev_.points_pyr[i-1], prev_.normals_pyr[i-1], prev_.points_pyr[i], prev_.normals_pyr[i]);
-#endif
         cuda::waitAllDefaultStream();
     }
 
@@ -262,14 +245,8 @@ void kfusion::KinFu::renderImage(cuda::Image& image, int flag)
     const KinFuParams& p = params_;
     image.create(p.rows, flag != 3 ? p.cols : p.cols * 2);
 
-#if defined USE_DEPTH
-    #define PASS1 prev_.depth_pyr
-#else
-    #define PASS1 prev_.points_pyr
-#endif
-
     if (flag < 1 || flag > 3)
-        cuda::renderImage(PASS1[0], prev_.normals_pyr[0], params_.intr, params_.light_pose, image);
+        cuda::renderImage(prev_.points_pyr[0], prev_.normals_pyr[0], params_.intr, params_.light_pose, image);
     else if (flag == 2)
         cuda::renderTangentColors(prev_.normals_pyr[0], image);
     else /* if (flag == 3) */
@@ -277,10 +254,9 @@ void kfusion::KinFu::renderImage(cuda::Image& image, int flag)
         DeviceArray2D<RGB> i1(p.rows, p.cols, image.ptr(), image.step());
         DeviceArray2D<RGB> i2(p.rows, p.cols, image.ptr() + p.cols, image.step());
 
-        cuda::renderImage(PASS1[0], prev_.normals_pyr[0], params_.intr, params_.light_pose, i1);
+        cuda::renderImage(prev_.points_pyr[0], prev_.normals_pyr[0], params_.intr, params_.light_pose, i1);
         cuda::renderTangentColors(prev_.normals_pyr[0], i2);
     }
-#undef PASS1
 }
 
 
@@ -292,16 +268,10 @@ void kfusion::KinFu::renderImage(cuda::Image& image, const Affine3f& pose, int f
     normals_.create(p.rows, p.cols);
     points_.create(p.rows, p.cols);
 
-#if defined USE_DEPTH
-    #define PASS1 depths_
-#else
-    #define PASS1 points_
-#endif
-
-    tsdf_volume_->raycast(pose, p.intr, PASS1, normals_);
+    tsdf_volume_->raycast(pose, p.intr, points_, normals_);
 
     if (flag < 1 || flag > 3)
-        cuda::renderImage(PASS1, normals_, params_.intr, params_.light_pose, image);
+        cuda::renderImage(points_, normals_, params_.intr, params_.light_pose, image);
     else if (flag == 2)
         cuda::renderTangentColors(normals_, image);
     else /* if (flag == 3) */
@@ -309,10 +279,9 @@ void kfusion::KinFu::renderImage(cuda::Image& image, const Affine3f& pose, int f
         DeviceArray2D<RGB> i1(p.rows, p.cols, image.ptr(), image.step());
         DeviceArray2D<RGB> i2(p.rows, p.cols, image.ptr() + p.cols, image.step());
 
-        cuda::renderImage(PASS1, normals_, params_.intr, params_.light_pose, i1);
+        cuda::renderImage(points_, normals_, params_.intr, params_.light_pose, i1);
         cuda::renderTangentColors(normals_, i2);
     }
-#undef PASS1
 }
 
 

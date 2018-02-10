@@ -123,6 +123,7 @@ struct KinFuApp
 
       if(event.code == 'm' || event.code == 'M')
           kinfu.take_mesh(*kinfu.kinfu_);
+
   }
 
   KinFuApp(SequenceSource& source, const KinFuParams& params) : exit_ (false), capture_(source), interactive_mode_(false), pause_(false) {
@@ -220,6 +221,7 @@ struct KinFuApp
       }
 
       cv::Mat mesh_colors(1, n_vert, CV_8UC4);
+      printf("n_vert: %d\n", n_vert);
 
       if (kinfu.params().integrate_color)
       {
@@ -231,6 +233,9 @@ struct KinFuApp
       triangles.download(mesh.cloud.ptr<Point>());
 
       viz.showWidget("cloud", cv::viz::WMesh(mesh));
+      
+      // cv::imshow("mesh_colors", mesh_colors);
+      // cv::waitKey(0);
   }
 
   /**
@@ -333,15 +338,15 @@ int main (int argc, char* argv[])
   // string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_cabinet/rgbd_dataset_freiburg3_cabinet/";
   // float magic_factor = 1;
   // float volume_size = 10.0f;
-  // string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_teddy/rgbd_dataset_freiburg3_teddy/";
-  // float magic_factor = 1;
-  // float volume_size = 10.0f;
+  string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_teddy/rgbd_dataset_freiburg3_teddy/";
+  float magic_factor = 1;
+  float volume_size = 10.0f;
   // string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg1_plant/rgbd_dataset_freiburg1_plant/";
   // float magic_factor = 1;
   // float volume_size = 10.0f;
-  string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/ICL-NUIM/living_room_traj0_frei_png/";
-  float magic_factor = 0.1;
-  float volume_size = 5.0f;
+  // string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/ICL-NUIM/living_room_traj0_frei_png/";
+  // float magic_factor = 0.1;
+  // float volume_size = 5.0f;
 
   SequenceSource capture(dataset_dir, magic_factor);
 
@@ -350,7 +355,7 @@ int main (int argc, char* argv[])
   custom_params.tsdf_volume_dims = Vec3i::all(512);
   custom_params.color_volume_dims = Vec3i::all(512);
   custom_params.volume_size = Vec3f::all(volume_size);
-  custom_params.volume_pose = Affine3f().translate(Vec3f(-custom_params.volume_size[0]/2, -custom_params.volume_size[1]/2, 0.5f));
+  custom_params.volume_pose = Affine3f().translate(Vec3f(-custom_params.volume_size[0]/2, -custom_params.volume_size[1]/2, -0.5f));
   custom_params.tsdf_trunc_dist = 0.002;
   custom_params.bilateral_kernel_size = 3;     //pixels
 
