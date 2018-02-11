@@ -198,6 +198,7 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
 
     cuda::waitAllDefaultStream();
 
+
     //can't perform more on first frame
     if (frame_counter_ == 0)
     {
@@ -269,7 +270,7 @@ void kfusion::KinFu::renderImage(cuda::Image& image, int flag)
 
         // raycasted color 
         cv::Mat color_host(p.rows, p.cols, CV_8UC4);
-        prev_.colors_pyr[0].download(color_host.ptr<RGB>(), 640*4);
+        prev_.colors_pyr[0].download(color_host.ptr<RGB>(), params_.cols*4);
         cv::Mat color_host2(p.rows, p.cols, CV_8UC3);
         cvtColor(color_host, color_host2, CV_BGRA2BGR);
         cv::imshow("raycasted color", color_host2);

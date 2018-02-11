@@ -46,7 +46,7 @@ public:
         dataset_dir = _dataset_dir;
         asso_file = _dataset_dir + "/associations.txt";
         magic_factor = _magic_factor;
-        // cout << asso_file << endl;
+        cout << asso_file << endl;
 
         ifstream openFile(asso_file.c_str());
         if( openFile.is_open() ){
@@ -81,9 +81,9 @@ public:
         color = cv::imread(color_file_name);
         cv::cvtColor(color, color, CV_BGR2BGRA, 4);
 
-        // cv::imshow("color", color);
-        // cv::imshow("depth", depth);
-        // cv::waitKey();
+        // cv::imshow("color",color);
+        // cv::imshow("depth",depth);
+        // cv::waitKey(0);
 
         if (idx++ > seq_n)
         {
@@ -337,15 +337,30 @@ int main (int argc, char* argv[])
   // string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_cabinet/rgbd_dataset_freiburg3_cabinet/";
   // float magic_factor = 1;
   // float volume_size = 10.0f;
-  string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_teddy/rgbd_dataset_freiburg3_teddy/";
-  float magic_factor = 1;
-  float volume_size = 10.0f;
+
+  // string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_teddy/rgbd_dataset_freiburg3_teddy/";
+  // float magic_factor = 1;
+  // float volume_size = 10.0f;
+  // int img_cols = 640;
+  // int img_rows = 480;
+
   // string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg1_plant/rgbd_dataset_freiburg1_plant/";
   // float magic_factor = 1;
   // float volume_size = 10.0f;
+
   // string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/ICL-NUIM/living_room_traj0_frei_png/";
   // float magic_factor = 0.1;
   // float volume_size = 5.0f;
+  // int img_cols = 640;
+  // int img_rows = 480;
+  // float focal_length = 525.0f;
+  
+  string dataset_dir = "/home/dongwonshin/Desktop/SceneNetRGBD-val/val/0/2/";
+  float magic_factor = 1.0f;
+  float volume_size = 10.0f;
+  int img_cols = 320;
+  int img_rows = 240;
+  float focal_length = 200.0f;
 
   SequenceSource capture(dataset_dir, magic_factor);
 
@@ -354,9 +369,12 @@ int main (int argc, char* argv[])
   custom_params.tsdf_volume_dims = Vec3i::all(512);
   custom_params.color_volume_dims = Vec3i::all(512);
   custom_params.volume_size = Vec3f::all(volume_size);
-  custom_params.volume_pose = Affine3f().translate(Vec3f(-custom_params.volume_size[0]/2, -custom_params.volume_size[1]/2, -0.5f));
+  custom_params.volume_pose = Affine3f().translate(Vec3f(-custom_params.volume_size[0]/2, -custom_params.volume_size[1]/2, 0.0f));
   custom_params.tsdf_trunc_dist = 0.002;
-  custom_params.bilateral_kernel_size = 3;     //pixels
+  custom_params.bilateral_kernel_size = 1;     //pixels
+  custom_params.cols = img_cols;
+  custom_params.rows = img_rows;
+  custom_params.intr = Intr(focal_length, focal_length, custom_params.cols/2 - 0.5f, custom_params.rows/2 - 0.5f);
 
   KinFuApp app (capture, custom_params);
 
