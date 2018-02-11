@@ -263,18 +263,16 @@ void kfusion::KinFu::renderImage(cuda::Image& image, int flag)
     {
         DeviceArray2D<RGB> i1(p.rows, p.cols, image.ptr(), image.step());
         DeviceArray2D<RGB> i2(p.rows, p.cols, image.ptr() + p.cols, image.step());
-        // DeviceArray2D<RGB> i3(p.rows, p.cols, image.ptr() + 2*p.cols, image.step());
 
         cuda::renderImage(prev_.points_pyr[0], prev_.normals_pyr[0], params_.intr, params_.light_pose, i1);
         cuda::renderTangentColors(prev_.normals_pyr[0], i2);
-        // cuda::renderColors(prev_.colors_pyr[0]);
 
-        cv::Mat color_host(480, 640, CV_8UC4);
+        // raycasted color 
+        cv::Mat color_host(p.rows, p.cols, CV_8UC4);
         prev_.colors_pyr[0].download(color_host.ptr<RGB>(), 640*4);
-
-        cv::Mat color_host2(480, 640, CV_8UC3);
+        cv::Mat color_host2(p.rows, p.cols, CV_8UC3);
         cvtColor(color_host, color_host2, CV_BGRA2BGR);
-        cv::imshow("test", color_host2);
+        cv::imshow("raycasted color", color_host2);
     }
 }
 

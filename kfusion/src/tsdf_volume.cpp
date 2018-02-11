@@ -107,7 +107,8 @@ void kfusion::cuda::TsdfVolume::raycast(const Affine3f& camera_pose, const Intr&
 
 }
 
-void kfusion::cuda::TsdfVolume::raycast(const Affine3f& camera_pose, const Intr& intr, Cloud& points, Normals& normals, Image& colors, const cuda::ColorVolume& _color_volume)
+void kfusion::cuda::TsdfVolume::raycast(const Affine3f& camera_pose, const Intr& intr, Cloud& points, Normals& normals, 
+                                        Image& colors, const cuda::ColorVolume& _color_volume)
 {
     device::Normals& n = (device::Normals&)normals;
     device::Points& p = (device::Points&)points;

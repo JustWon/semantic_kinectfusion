@@ -183,17 +183,17 @@ namespace kfusion
             return tsdf;
         }
 
-        __kf_device__ uchar4 color_data(const uchar4* color_vol_data, const float3& p_voxels)
+        __kf_device__ uchar4 color_data(const uchar4* color_vol_data, const float3& p_voxels, const int3& vol_dim)
         {
             float3 cf = p_voxels;
 
             //rounding to negative infinity
             int3 g = make_int3(__float2int_rd (cf.x), __float2int_rd (cf.y), __float2int_rd (cf.z));
 
-            if (g.x < 0 || g.x >= 512 - 1 || g.y < 0 || g.y >= 512 - 1 || g.z < 0 || g.z >= 512 - 1)
+            if (g.x < 0 || g.x >= vol_dim.x - 1 || g.y < 0 || g.y >= vol_dim.y - 1 || g.z < 0 || g.z >= vol_dim.z - 1)
                 return make_uchar4(0,0,0,0);
 
-            return *(color_vol_data + g.x + g.y*512 + g.z*512*512);
+            return *(color_vol_data + g.x + g.y*vol_dim.x + g.z*vol_dim.y*vol_dim.x);
         }
 
         struct TsdfRaycaster
@@ -351,7 +351,7 @@ namespace kfusion
 
                             normals(y, x) = make_float4(normal.x, normal.y, normal.z, 0.f);
                             points(y, x) = make_float4(vertex.x, vertex.y, vertex.z, 0.f);
-                            colors(y, x) = color_data(color_vol_data, curr * voxel_size_inv);//make_uchar4(100,0,0,100);
+                            colors(y, x) = color_data(color_vol_data, curr * voxel_size_inv, volume.dims);
                         }
                         break;
                     }
