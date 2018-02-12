@@ -200,9 +200,6 @@ namespace kfusion
             Vec3f size_;
             /**< The pose of the volume in the world */
             Affine3f pose_;
-
-            float gradient_delta_factor_;
-            float raycast_step_factor_;
         };
     }
 }

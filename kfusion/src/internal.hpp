@@ -133,8 +133,8 @@ namespace kfusion
                      const Reprojector& reproj, Depth& depth, Normals& normals, float step_factor, float delta_factor);
 
         void raycast(const TsdfVolume& volume, const Aff3f& aff, const Mat3f& Rinv,
-                     const Reprojector& reproj, Points& points, Normals& normals, Image& colors, float step_factor, float delta_factor, 
-                     const uchar4* color_vol_data);
+                     const Reprojector& reproj, Points& points, Normals& normals, Image& colors, Image& semantics, float step_factor, float delta_factor, 
+                     const uchar4* color_vol_data, const uchar4* semantic_vol_data);
 
         __kf_device__ ushort2 pack_tsdf(float tsdf, int weight);
         __kf_device__ float unpack_tsdf(ushort2 value, int& weight);

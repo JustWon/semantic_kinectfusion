@@ -270,7 +270,7 @@ struct KinFuApp
           {
               SampledScopeTime fps(time_ms); (void)fps;
               if (kinfu.params().integrate_color)
-                  has_image = kinfu(depth_device_, color_device_);
+                  has_image = kinfu(depth_device_, color_device_, semantic_device_);
               else
                   has_image = kinfu(depth_device_);
           }
@@ -377,8 +377,10 @@ int main (int argc, char* argv[])
 
   KinFuParams custom_params = KinFuParams::default_params();
   custom_params.integrate_color = true;
+  custom_params.integrate_semantic = true;
   custom_params.tsdf_volume_dims = Vec3i::all(512);
   custom_params.color_volume_dims = Vec3i::all(512);
+  custom_params.semantic_volume_dims = Vec3i::all(512);
   custom_params.volume_size = Vec3f::all(volume_size);
   custom_params.volume_pose = Affine3f().translate(Vec3f(-custom_params.volume_size[0]/2, -custom_params.volume_size[1]/2, 0.0f));
   custom_params.tsdf_trunc_dist = 0.002;

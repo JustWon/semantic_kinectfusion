@@ -27,10 +27,12 @@ namespace kfusion
         int rows;  //pixels
 
         bool integrate_color;  //Color integration
+        bool integrate_semantic;  //Semantic integration
         Intr intr;  //Camera parameters
 
         Vec3i tsdf_volume_dims; //number of voxels for the TSDF volume
         Vec3i color_volume_dims; //number of voxels for the color volume (typically <= TSDF volume)
+        Vec3i semantic_volume_dims; //number of voxels for the color volume (typically <= TSDF volume)
         Vec3f volume_size; //meters
         Affine3f volume_pose; //meters, inital pose
 
@@ -77,7 +79,7 @@ namespace kfusion
 
         void reset();
 
-        bool operator()(const cuda::Depth& depth, const cuda::Image& image = cuda::Image());
+        bool operator()(const cuda::Depth& depth, const cuda::Image& image = cuda::Image(), const cuda::Image& semantic = cuda::Image());
 
         void renderImage(cuda::Image& image, int flags = 0);
         void renderImage(cuda::Image& image, const Affine3f& pose, int flags = 0);
@@ -98,9 +100,11 @@ namespace kfusion
         cuda::Normals normals_;
         cuda::Depth depths_;
         cuda::Image colors_;
+        cuda::Image semantics_;
 
         cv::Ptr<cuda::TsdfVolume> tsdf_volume_;
         cv::Ptr<cuda::ColorVolume> color_volume_;
+        cv::Ptr<cuda::ColorVolume> semantic_volume_;
         cv::Ptr<cuda::ProjectiveICP> icp_;
     };
 }

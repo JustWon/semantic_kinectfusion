@@ -195,6 +195,18 @@ namespace kfusion
 
             return *(color_vol_data + g.x + g.y*vol_dim.x + g.z*vol_dim.y*vol_dim.x);
         }
+        __kf_device__ uchar4 semantic_data(const uchar4* semantic_vol_data, const float3& p_voxels, const int3& vol_dim)
+        {
+            float3 cf = p_voxels;
+
+            //rounding to negative infinity
+            int3 g = make_int3(__float2int_rd (cf.x), __float2int_rd (cf.y), __float2int_rd (cf.z));
+
+            if (g.x < 0 || g.x >= vol_dim.x - 1 || g.y < 0 || g.y >= vol_dim.y - 1 || g.z < 0 || g.z >= vol_dim.z - 1)
+                return make_uchar4(0,0,0,0);
+
+            return *(semantic_vol_data + g.x + g.y*vol_dim.x + g.z*vol_dim.y*vol_dim.x);
+        }
 
         struct TsdfRaycaster
         {
@@ -290,7 +302,9 @@ namespace kfusion
             }
 
             __kf_device__
-            void operator()(PtrStepSz<Point> points, PtrStep<Normal> normals, PtrStepSz<Color> colors, const uchar4* color_vol_data) const
+            void operator()(PtrStepSz<Point> points, PtrStep<Normal> normals, 
+                            PtrStepSz<Color> colors, const uchar4* color_vol_data,
+                            PtrStepSz<Color> semantics, const uchar4* semantic_vol_data) const
             {
                 int x = blockIdx.x * blockDim.x + threadIdx.x;
                 int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -302,6 +316,7 @@ namespace kfusion
 
                 points(y, x) = normals(y, x) = make_float4(qnan, qnan, qnan, qnan);
                 colors(y, x) = make_uchar4(qnan,qnan,qnan,qnan);
+                semantics(y, x) = make_uchar4(qnan,qnan,qnan,qnan);
 
                 float3 ray_org = aff.t;
                 float3 ray_dir = normalized( aff.R * reproj(x, y, 1.f) );
@@ -352,6 +367,7 @@ namespace kfusion
                             normals(y, x) = make_float4(normal.x, normal.y, normal.z, 0.f);
                             points(y, x) = make_float4(vertex.x, vertex.y, vertex.z, 0.f);
                             colors(y, x) = color_data(color_vol_data, curr * voxel_size_inv, volume.dims);
+                            semantics(y, x) = semantic_data(semantic_vol_data, curr * voxel_size_inv, volume.dims);
                         }
                         break;
                     }
@@ -386,8 +402,10 @@ namespace kfusion
         __global__ void raycast_kernel(const TsdfRaycaster raycaster, PtrStepSz<ushort> depth, PtrStep<Normal> normals)
         { raycaster(depth, normals); };
 
-        __global__ void raycast_kernel(const TsdfRaycaster raycaster, PtrStepSz<Point> points, PtrStep<Normal> normals, PtrStepSz<Color> colors, const uchar4* color_vol_data)
-        { raycaster(points, normals, colors, color_vol_data); };
+        __global__ void raycast_kernel(const TsdfRaycaster raycaster, PtrStepSz<Point> points, PtrStep<Normal> normals, 
+                                        PtrStepSz<Color> colors, const uchar4* color_vol_data,
+                                        PtrStepSz<Color> semantics, const uchar4* semantic_vol_data)
+        { raycaster(points, normals, colors, color_vol_data, semantics, semantic_vol_data); };
 
     }
 }
@@ -411,7 +429,8 @@ void kfusion::device::raycast(const TsdfVolume& volume, const Aff3f& aff, const 
 
 
 void kfusion::device::raycast(const TsdfVolume& volume, const Aff3f& aff, const Mat3f& Rinv, const Reprojector& reproj,
-                              Points& points, Normals& normals, Image& colors, float raycaster_step_factor, float gradient_delta_factor, const uchar4* color_vol_data)
+                              Points& points, Normals& normals, Image& colors, Image& semantics, float raycaster_step_factor, float gradient_delta_factor, 
+                              const uchar4* color_vol_data, const uchar4* semantic_vol_data)
 {
     TsdfRaycaster rc(volume, aff, Rinv, reproj);
 
@@ -423,7 +442,7 @@ void kfusion::device::raycast(const TsdfVolume& volume, const Aff3f& aff, const 
     dim3 block(32, 8);
     dim3 grid (divUp (points.cols(), block.x), divUp (points.rows(), block.y));
 
-    raycast_kernel<<<grid, block>>>(rc, (PtrStepSz<Point>)points, normals, colors, color_vol_data);
+    raycast_kernel<<<grid, block>>>(rc, (PtrStepSz<Point>)points, normals, colors, color_vol_data, semantics, semantic_vol_data);
     cudaSafeCall (cudaGetLastError ());
 }
 

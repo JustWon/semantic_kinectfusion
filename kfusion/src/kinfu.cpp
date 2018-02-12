@@ -19,10 +19,12 @@ kfusion::KinFuParams kfusion::KinFuParams::default_params()
     p.cols = 640;  //pixels
     p.rows = 480;  //pixels
     p.integrate_color = false;
+    p.integrate_semantic = true;
     p.intr = Intr(525.f, 525.f, p.cols/2 - 0.5f, p.rows/2 - 0.5f);
 
     p.tsdf_volume_dims = Vec3i::all(512);  //number of voxels
-    p.color_volume_dims = Vec3i::all(256);  //number of voxels
+    p.color_volume_dims = Vec3i::all(512);  //number of voxels
+    p.semantic_volume_dims = Vec3i::all(512);  //number of voxels
     p.volume_size = Vec3f::all(3.f);  //meters
     p.volume_pose = Affine3f().translate(Vec3f(-p.volume_size[0]/2, -p.volume_size[1]/2, 0.5f));
 
@@ -54,6 +56,7 @@ kfusion::KinFu::KinFu(const KinFuParams& params) : frame_counter_(0), params_(pa
 {
     CV_Assert(params.tsdf_volume_dims[0] % 32 == 0);
     CV_Assert(params.color_volume_dims[0] % 32 == 0);
+    CV_Assert(params.semantic_volume_dims[0] % 32 == 0);
 
     tsdf_volume_ = cv::Ptr<cuda::TsdfVolume>(new cuda::TsdfVolume(params_.tsdf_volume_dims));
 
@@ -66,11 +69,18 @@ kfusion::KinFu::KinFu(const KinFuParams& params) : frame_counter_(0), params_(pa
 
     if (params.integrate_color) {
         color_volume_ = cv::Ptr<cuda::ColorVolume>(new cuda::ColorVolume(params_.color_volume_dims));
-
         color_volume_->setTruncDist(params_.tsdf_trunc_dist);
         color_volume_->setMaxWeight(params_.color_max_weight);
         color_volume_->setSize(params_.volume_size);
         color_volume_->setPose(params_.volume_pose);
+    }
+
+    if (params.integrate_semantic) {
+        semantic_volume_ = cv::Ptr<cuda::ColorVolume>(new cuda::ColorVolume(params_.semantic_volume_dims));
+        semantic_volume_->setTruncDist(params_.tsdf_trunc_dist);
+        semantic_volume_->setMaxWeight(params_.color_max_weight);
+        semantic_volume_->setSize(params_.volume_size);
+        semantic_volume_->setPose(params_.volume_pose);
     }
 
     icp_ = cv::Ptr<cuda::ProjectiveICP>(new cuda::ProjectiveICP());
@@ -134,6 +144,9 @@ void kfusion::KinFu::allocate_buffers()
     curr_.colors_pyr.resize(LEVELS);
     prev_.colors_pyr.resize(LEVELS);
 
+    curr_.semantics_pyr.resize(LEVELS);
+    prev_.semantics_pyr.resize(LEVELS);
+
     for(int i = 0; i < LEVELS; ++i)
     {
         curr_.depth_pyr[i].create(rows, cols);
@@ -148,6 +161,9 @@ void kfusion::KinFu::allocate_buffers()
         curr_.colors_pyr[i].create(rows, cols);
         prev_.colors_pyr[i].create(rows, cols);
 
+        curr_.semantics_pyr[i].create(rows, cols);
+        prev_.semantics_pyr[i].create(rows, cols);
+
         cols /= 2;
         rows /= 2;
     }
@@ -155,7 +171,8 @@ void kfusion::KinFu::allocate_buffers()
     depths_.create(params_.rows, params_.cols);
     normals_.create(params_.rows, params_.cols);
     points_.create(params_.rows, params_.cols);
-    colors_.create(params_.rows, params_.cols);
+        colors_.create(params_.rows, params_.cols);
+    semantics_.create(params_.rows, params_.cols);
 }
 
 void kfusion::KinFu::reset()
@@ -179,7 +196,7 @@ kfusion::Affine3f kfusion::KinFu::getCameraPose (int time) const
     return poses_[time];
 }
 
-bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion::cuda::Image& image)
+bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion::cuda::Image& image, const kfusion::cuda::Image& semantic)
 {
     const KinFuParams& p = params_;
     const int LEVELS = icp_->getUsedLevelsNum();
@@ -206,6 +223,7 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
         curr_.points_pyr.swap(prev_.points_pyr);
         curr_.normals_pyr.swap(prev_.normals_pyr);
         curr_.colors_pyr.swap(prev_.colors_pyr);
+        curr_.semantics_pyr.swap(prev_.semantics_pyr);
         return ++frame_counter_, false;
     }
 
@@ -236,13 +254,19 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
         if (p.integrate_color) {
             color_volume_->integrate(image, dists_, poses_.back(), p.intr);
         }
+        if (p.integrate_semantic) {
+            semantic_volume_->integrate(semantic, dists_, poses_.back(), p.intr);
+        }
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Ray casting
     {
         //ScopeTime time("ray-cast-all");
-        tsdf_volume_->raycast(poses_.back(), p.intr, prev_.points_pyr[0], prev_.normals_pyr[0], prev_.colors_pyr[0], *color_volume_);
+        tsdf_volume_->raycast(poses_.back(), p.intr, prev_.points_pyr[0], prev_.normals_pyr[0], 
+                                prev_.colors_pyr[0], *color_volume_,
+                                prev_.semantics_pyr[0], *semantic_volume_);
+
         for (int i = 1; i < LEVELS; ++i)
             resizePointsNormals(prev_.points_pyr[i-1], prev_.normals_pyr[i-1], prev_.points_pyr[i], prev_.normals_pyr[i]);
         cuda::waitAllDefaultStream();
@@ -274,6 +298,13 @@ void kfusion::KinFu::renderImage(cuda::Image& image, int flag)
         cv::Mat color_host2(p.rows, p.cols, CV_8UC3);
         cvtColor(color_host, color_host2, CV_BGRA2BGR);
         cv::imshow("raycasted color", color_host2);
+
+        // raycasted semantic
+        cv::Mat semantic_host(p.rows, p.cols, CV_8UC4);
+        prev_.semantics_pyr[0].download(semantic_host.ptr<RGB>(), params_.cols*4);
+        cv::Mat semantic_host2(p.rows, p.cols, CV_8UC3);
+        cvtColor(semantic_host, semantic_host2, CV_BGRA2BGR);
+        cv::imshow("raycasted semantic", semantic_host2);
     }
 }
 
@@ -286,8 +317,9 @@ void kfusion::KinFu::renderImage(cuda::Image& image, const Affine3f& pose, int f
     normals_.create(p.rows, p.cols);
     points_.create(p.rows, p.cols);
     colors_.create(p.rows, p.cols);
+    semantics_.create(p.rows, p.cols);
 
-    tsdf_volume_->raycast(pose, p.intr, points_, normals_, colors_, *color_volume_);
+    tsdf_volume_->raycast(pose, p.intr, points_, normals_, colors_, *color_volume_, semantics_, *semantic_volume_);
 
     if (flag < 1 || flag > 3)
         cuda::renderImage(points_, normals_, params_.intr, params_.light_pose, image);
