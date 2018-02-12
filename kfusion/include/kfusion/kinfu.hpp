@@ -74,6 +74,9 @@ namespace kfusion
         const cv::Ptr<cuda::ColorVolume> color_volume() const;
         cv::Ptr<cuda::ColorVolume> color_volume();
 
+        const cv::Ptr<cuda::ColorVolume> semantic_volume() const;
+        cv::Ptr<cuda::ColorVolume> semantic_volume();
+
         const cuda::ProjectiveICP& icp() const;
         cuda::ProjectiveICP& icp();
 

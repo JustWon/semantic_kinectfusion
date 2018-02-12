@@ -131,6 +131,9 @@ struct KinFuApp
       if(event.code == 'm' || event.code == 'M')
           kinfu.take_mesh(*kinfu.kinfu_);
 
+      if(event.code == 's' || event.code == 'S')
+          kinfu.take_semantic_mesh(*kinfu.kinfu_);
+
   }
 
   KinFuApp(SequenceSource& source, const KinFuParams& params) : exit_ (false), capture_(source), interactive_mode_(false), pause_(false) {
@@ -244,6 +247,42 @@ struct KinFuApp
       // cv::waitKey(0);
   }
 
+    void take_semantic_mesh(KinFu& kinfu)
+  {
+      if (!marching_cubes_)
+          marching_cubes_ = cv::Ptr<cuda::MarchingCubes>(new cuda::MarchingCubes());
+
+      cuda::DeviceArray<Point> triangles = marching_cubes_->run(kinfu.tsdf(), triangles_buffer_);
+      int n_vert = triangles.size();
+
+      cv::viz::Mesh mesh;
+      mesh.cloud.create(1, n_vert, CV_32FC4);
+      mesh.polygons.create(1, 4*n_vert/3, CV_32SC1);
+
+      for (int i = 0; i < n_vert/3; ++i) {
+          mesh.polygons.at<int>(4*i) = 3;
+          mesh.polygons.at<int>(4*i+1) = 3*i;
+          mesh.polygons.at<int>(4*i+2) = 3*i+1;
+          mesh.polygons.at<int>(4*i+3) = 3*i+2;
+      }
+
+      cv::Mat mesh_colors(1, n_vert, CV_8UC4);
+
+      if (kinfu.params().integrate_color)
+      {
+          kinfu.semantic_volume()->fetchColors(triangles, color_buffer_);
+          color_buffer_.download(mesh_colors.ptr<RGB>());
+          mesh.colors = mesh_colors;
+      }
+
+      triangles.download(mesh.cloud.ptr<Point>());
+
+      viz.showWidget("cloud", cv::viz::WMesh(mesh));
+
+      // cv::imshow("mesh_colors", mesh_colors);
+      // cv::waitKey(0);
+  }
+
   /**
    * @name execute
    * @fn bool execute()
@@ -292,6 +331,7 @@ struct KinFuApp
           case 't': case 'T' : take_cloud(kinfu); break;
           case 'i': case 'I' : interactive_mode_ = !interactive_mode_; break;
           case 'm': case 'M' : take_mesh(kinfu); break;
+          case 's': case 'S' : take_semantic_mesh(kinfu); break;
           case 27: exit_ = true; break;
           case 32: pause_ = !pause_; break;
           }

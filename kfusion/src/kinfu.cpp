@@ -121,6 +121,20 @@ cv::Ptr<cuda::ColorVolume> kfusion::KinFu::color_volume ()
     return cv::Ptr<cuda::ColorVolume>();
 }
 
+const cv::Ptr<cuda::ColorVolume> kfusion::KinFu::semantic_volume () const
+{
+    if (params_.integrate_semantic)
+        return semantic_volume_;
+    return cv::Ptr<cuda::ColorVolume>();
+}
+
+cv::Ptr<cuda::ColorVolume> kfusion::KinFu::semantic_volume ()
+{
+    if (params_.integrate_semantic)
+        return semantic_volume_;
+    return cv::Ptr<cuda::ColorVolume>();
+}
+
 kfusion::cuda::ProjectiveICP& kfusion::KinFu::icp()
 { return *icp_; }
 
