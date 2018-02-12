@@ -19,6 +19,7 @@ class SequenceSource
     string asso_file;
     vector<string> color_files;
     vector<string> depth_files;
+    vector<string> semantic_files;
     float magic_factor;
     int seq_n;
     int idx;
@@ -56,6 +57,7 @@ public:
                 vector<string> tokens = split(line.c_str(), ' ');
                 color_files.push_back(dataset_dir+tokens[1]);
                 depth_files.push_back(dataset_dir+tokens[3]);
+                semantic_files.push_back(dataset_dir+tokens[5]);
             }
             openFile.close();
         }
@@ -64,12 +66,14 @@ public:
         seq_n = color_files.size();
     }
 
-    bool grab(cv::Mat& depth, cv::Mat& color)
+    bool grab(cv::Mat& depth, cv::Mat& color, cv::Mat& semantic)
     {
         std::string depth_file_name;
         std::string color_file_name;
+        std::string semantic_file_name;
         color_file_name = color_files[idx];
         depth_file_name = depth_files[idx];
+        semantic_file_name = semantic_files[idx];
 
         depth = cv::imread(depth_file_name, CV_LOAD_IMAGE_ANYDEPTH);
         for (int y = 0 ; y < depth.rows ; y++)
@@ -81,9 +85,12 @@ public:
         color = cv::imread(color_file_name);
         cv::cvtColor(color, color, CV_BGR2BGRA, 4);
 
+        semantic = cv::imread(semantic_file_name);
+        cv::cvtColor(semantic, semantic, CV_BGR2BGRA, 4);
+
         // cv::imshow("color",color);
         // cv::imshow("depth",depth);
-        // cv::waitKey(0);
+        // cv::imshow("semantic",semantic
 
         if (idx++ > seq_n)
         {
@@ -246,18 +253,19 @@ struct KinFuApp
   bool execute()
   {
       KinFu& kinfu = *kinfu_;
-      cv::Mat depth, image;
+      cv::Mat depth, image, semantic;
       double time_ms = 0;
       bool has_image = false;
 
       for (int i = 0; !exit_ && !viz.wasStopped(); ++i)
       {
-          bool has_frame = capture_.grab(depth, image);
+          bool has_frame = capture_.grab(depth, image, semantic);
           if (!has_frame)
               return std::cout << "Can't grab" << std::endl, false;
 
           depth_device_.upload(depth.data, depth.step, depth.rows, depth.cols);
           color_device_.upload(image.data, image.step, image.rows, image.cols);
+          semantic_device_.upload(semantic.data, semantic.step, semantic.rows, semantic.cols);
 
           {
               SampledScopeTime fps(time_ms); (void)fps;
@@ -315,6 +323,8 @@ struct KinFuApp
   /**< Color frame on the GPU */
   cuda::Image color_device_;
   /**< point buffer used when fetching the point cloud from the tsdf volume */
+  cuda::Image semantic_device_;
+
   cuda::DeviceArray<Point> cloud_buffer_;
   /**< color buffer used when fetching the colors from the color volume */
   cuda::DeviceArray<RGB> color_buffer_;
@@ -338,11 +348,12 @@ int main (int argc, char* argv[])
   // float magic_factor = 1;
   // float volume_size = 10.0f;
 
-  // string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_teddy/rgbd_dataset_freiburg3_teddy/";
-  // float magic_factor = 1;
-  // float volume_size = 10.0f;
-  // int img_cols = 640;
-  // int img_rows = 480;
+  string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_teddy/rgbd_dataset_freiburg3_teddy/";
+  float magic_factor = 1;
+  float volume_size = 10.0f;
+  int img_cols = 640;
+  int img_rows = 480;
+  float focal_length = 525.0f;
 
   // string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg1_plant/rgbd_dataset_freiburg1_plant/";
   // float magic_factor = 1;
@@ -355,12 +366,12 @@ int main (int argc, char* argv[])
   // int img_rows = 480;
   // float focal_length = 525.0f;
   
-  string dataset_dir = "/home/dongwonshin/Desktop/SceneNetRGBD-val/val/0/2/";
-  float magic_factor = 1.0f;
-  float volume_size = 10.0f;
-  int img_cols = 320;
-  int img_rows = 240;
-  float focal_length = 200.0f;
+  // string dataset_dir = "/home/dongwonshin/Desktop/SceneNetRGBD-val/val/0/4/";
+  // float magic_factor = 1.0f;
+  // float volume_size = 10.0f;
+  // int img_cols = 320;
+  // int img_rows = 240;
+  // float focal_length = 200.0f;
 
   SequenceSource capture(dataset_dir, magic_factor);
 
@@ -375,6 +386,8 @@ int main (int argc, char* argv[])
   custom_params.cols = img_cols;
   custom_params.rows = img_rows;
   custom_params.intr = Intr(focal_length, focal_length, custom_params.cols/2 - 0.5f, custom_params.rows/2 - 0.5f);
+  custom_params.icp_dist_thres = 0.25f;                //meters
+  custom_params.icp_angle_thres = deg2rad(60.f); //radians
 
   KinFuApp app (capture, custom_params);
 

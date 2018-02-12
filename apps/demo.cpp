@@ -184,6 +184,7 @@ struct KinFuApp
     cuda::Image view_device_;
     cuda::Depth depth_device_;
     cuda::Image color_device_;
+    cuda::Image semantic_device_;
     cuda::DeviceArray<Point> cloud_buffer_;
     cuda::DeviceArray<RGB> color_buffer_;
     cv::Ptr<cuda::MarchingCubes> marching_cubes_;
