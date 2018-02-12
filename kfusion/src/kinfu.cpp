@@ -311,14 +311,18 @@ void kfusion::KinFu::renderImage(cuda::Image& image, int flag)
         prev_.colors_pyr[0].download(color_host.ptr<RGB>(), params_.cols*4);
         cv::Mat color_host2(p.rows, p.cols, CV_8UC3);
         cvtColor(color_host, color_host2, CV_BGRA2BGR);
-        cv::imshow("raycasted color", color_host2);
+        // cv::imshow("raycasted color", color_host2);
 
         // raycasted semantic
         cv::Mat semantic_host(p.rows, p.cols, CV_8UC4);
         prev_.semantics_pyr[0].download(semantic_host.ptr<RGB>(), params_.cols*4);
         cv::Mat semantic_host2(p.rows, p.cols, CV_8UC3);
         cvtColor(semantic_host, semantic_host2, CV_BGRA2BGR);
-        cv::imshow("raycasted semantic", semantic_host2);
+        // cv::imshow("raycasted semantic", semantic_host2);
+
+        cv::Mat concat;
+        cv::hconcat(color_host2, semantic_host2, concat);
+        cv::imshow("raycasted color / semantic", concat);
     }
 }
 
@@ -346,6 +350,24 @@ void kfusion::KinFu::renderImage(cuda::Image& image, const Affine3f& pose, int f
 
         cuda::renderImage(points_, normals_, params_.intr, params_.light_pose, i1);
         cuda::renderTangentColors(normals_, i2);
+
+        // raycasted color 
+        cv::Mat color_host(p.rows, p.cols, CV_8UC4);
+        colors_.download(color_host.ptr<RGB>(), params_.cols*4);
+        cv::Mat color_host2(p.rows, p.cols, CV_8UC3);
+        cvtColor(color_host, color_host2, CV_BGRA2BGR);
+        // cv::imshow("raycasted color", color_host2);
+
+        // raycasted semantic
+        cv::Mat semantic_host(p.rows, p.cols, CV_8UC4);
+        semantics_.download(semantic_host.ptr<RGB>(), params_.cols*4);
+        cv::Mat semantic_host2(p.rows, p.cols, CV_8UC3);
+        cvtColor(semantic_host, semantic_host2, CV_BGRA2BGR);
+        // cv::imshow("raycasted semantic", semantic_host2);
+
+        cv::Mat concat;
+        cv::hconcat(color_host2, semantic_host2, concat);
+        cv::imshow("raycasted color / semantic", concat);
     }
 }
 
