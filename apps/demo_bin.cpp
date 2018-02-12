@@ -133,7 +133,6 @@ struct KinFuApp
 
       if(event.code == 's' || event.code == 'S')
           kinfu.take_semantic_mesh(*kinfu.kinfu_);
-
   }
 
   KinFuApp(SequenceSource& source, const KinFuParams& params) : exit_ (false), capture_(source), interactive_mode_(false), pause_(false) {
@@ -317,9 +316,9 @@ struct KinFuApp
           if (has_image)
               show_raycasted(kinfu);
 
-          show_depth(depth);
-          if (kinfu.params().integrate_color)
-              cv::imshow("Image", image);
+          // show_depth(depth);
+          // if (kinfu.params().integrate_color)
+          //     cv::imshow("Image", image);
 
           if (!interactive_mode_)
               viz.setViewerPose(kinfu.getCameraPose());
@@ -424,12 +423,12 @@ int main (int argc, char* argv[])
   custom_params.volume_size = Vec3f::all(volume_size);
   custom_params.volume_pose = Affine3f().translate(Vec3f(-custom_params.volume_size[0]/2, -custom_params.volume_size[1]/2, 0.0f));
   custom_params.tsdf_trunc_dist = 0.002;
-  custom_params.bilateral_kernel_size = 1;     //pixels
+  custom_params.bilateral_kernel_size = 3;     //pixels
   custom_params.cols = img_cols;
   custom_params.rows = img_rows;
   custom_params.intr = Intr(focal_length, focal_length, custom_params.cols/2 - 0.5f, custom_params.rows/2 - 0.5f);
   custom_params.icp_dist_thres = 0.25f;                //meters
-  custom_params.icp_angle_thres = deg2rad(60.f); //radians
+  custom_params.icp_angle_thres = deg2rad(30.f); //radians
 
   KinFuApp app (capture, custom_params);
 

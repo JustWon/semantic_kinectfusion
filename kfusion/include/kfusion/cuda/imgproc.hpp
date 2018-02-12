@@ -26,8 +26,6 @@ namespace kfusion
 
         KF_EXPORTS void renderTangentColors(const Normals& normals, Image& image);
 
-        KF_EXPORTS void renderColors(const Image& in_image);
-
         KF_EXPORTS void renderImage(const Depth& depth, const Normals& normals, const Intr& intr, const Vec3f& light_pose, Image& image);
 
         KF_EXPORTS void renderImage(const Cloud& points, const Normals& normals, const Intr& intr, const Vec3f& light_pose, Image& image);
