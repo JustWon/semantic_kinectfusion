@@ -50,6 +50,23 @@ __kf_device__ kfusion::device::ColorVolume::elem_type* kfusion::device::ColorVol
 { return ptr + dims.x * dims.y; }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// SemanticVolume
+
+__kf_device__ kfusion::device::SemanticVolume::elem_type* kfusion::device::SemanticVolume::operator()(int x, int y, int z)
+{ return data + x + y*dims.x + z*dims.y*dims.x; }
+
+__kf_device__ const kfusion::device::SemanticVolume::elem_type* kfusion::device::SemanticVolume::operator() (int x, int y, int z) const
+{ return data + x + y*dims.x + z*dims.y*dims.x; }
+
+__kf_device__ kfusion::device::SemanticVolume::elem_type* kfusion::device::SemanticVolume::beg(int x, int y) const
+{ return data + x + dims.x * y; }
+
+__kf_device__ kfusion::device::SemanticVolume::elem_type* kfusion::device::SemanticVolume::zstep(elem_type *const ptr) const
+{ return ptr + dims.x * dims.y; }
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Projector
 
 __kf_device__ float2 kfusion::device::Projector::operator()(const float3& p) const

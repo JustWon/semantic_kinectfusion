@@ -13,24 +13,24 @@ namespace kfusion
 {
     namespace device
     {
-        __global__ void clear_volume_kernel(ColorVolume color)
+        __global__ void clear_volume_kernel(SemanticVolume semantic)
         {
             int x = threadIdx.x + blockIdx.x * blockDim.x;
             int y = threadIdx.y + blockIdx.y * blockDim.y;
 
-            if (x < color.dims.x && y < color.dims.y)
+            if (x < semantic.dims.x && y < semantic.dims.y)
             {
-                uchar4 *beg = color.beg(x, y);
-                uchar4 *end = beg + color.dims.x * color.dims.y * color.dims.z;
+                uchar4 *beg = semantic.beg(x, y);
+                uchar4 *end = beg + semantic.dims.x * semantic.dims.y * semantic.dims.z;
 
-                for(uchar4* pos = beg; pos != end; pos = color.zstep(pos))
+                for(uchar4* pos = beg; pos != end; pos = semantic.zstep(pos))
                     *pos = make_uchar4 (0, 0, 0, 0);
             }
         }
     }
 }
 
-void kfusion::device::clear_volume(ColorVolume volume)
+void kfusion::device::clear_volume(SemanticVolume volume)
 {
     dim3 block (32, 8);
     dim3 grid (1, 1, 1);
@@ -51,7 +51,7 @@ namespace kfusion
         texture<uchar4, 2> image_tex(0, cudaFilterModePoint, cudaAddressModeBorder);
         texture<float, 2> depth_tex(0, cudaFilterModePoint, cudaAddressModeBorder, cudaCreateChannelDescHalf());
 
-        struct ColorIntegrator {
+        struct SenamticIntegrator {
             Aff3f vol2cam;
             PtrStep<float> vmap;
             Projector proj;
@@ -60,7 +60,7 @@ namespace kfusion
             float tranc_dist_inv;
 
             __kf_device__
-            void operator()(ColorVolume& volume) const
+            void operator()(SemanticVolume& volume) const
             {
                 int x = blockIdx.x * blockDim.x + threadIdx.x;
                 int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -73,7 +73,7 @@ namespace kfusion
                 float3 vx = make_float3(x * volume.voxel_size.x, y * volume.voxel_size.y, 0);
                 float3 vc = vol2cam * vx; //tranform from volume coo frame to camera one
 
-                ColorVolume::elem_type* vptr = volume.beg(x, y);
+                SemanticVolume::elem_type* vptr = volume.beg(x, y);
                 for(int i = 0; i < volume.dims.z; ++i, vc += zstep, vptr = volume.zstep(vptr))
                 {
                     float2 coo = proj(vc); // project to image coordinate
@@ -98,7 +98,7 @@ namespace kfusion
                             // Average with new value and weight
                             uchar4 rgb = tex2D(image_tex, coo.x, coo.y);
                             const float Wrk = 1.f;
-
+                            
                             float new_x =  __fdividef(__fmaf_rn(volume_rgbw.x, weight_prev, rgb.x), weight_prev + Wrk);
                             //uchar new_x = (volume_rgbw.x * weight_prev + Wrk * rgb.x) / (weight_prev + Wrk);
                             float new_y =  __fdividef(__fmaf_rn(volume_rgbw.y, weight_prev, rgb.y), weight_prev + Wrk);
@@ -122,17 +122,17 @@ namespace kfusion
             } // void operator()
         };
 
-        __global__ void integrate_kernel(const ColorIntegrator integrator, ColorVolume volume) {integrator(volume);};
+        __global__ void integrate_kernel(const SenamticIntegrator integrator, SemanticVolume volume) {integrator(volume);};
     }
 }
 
 void kfusion::device::integrate(const PtrStepSz<uchar4>& rgb_image,
                                 const PtrStepSz<ushort>& depth_map,
-                                ColorVolume& volume,
+                                SemanticVolume& volume,
                                 const Aff3f& aff,
                                 const Projector& proj)
 {
-    ColorIntegrator ti;
+    SenamticIntegrator ti;
     ti.im_size = make_int2(rgb_image.cols, rgb_image.rows);
     ti.vol2cam = aff;
     ti.proj = proj;
@@ -165,17 +165,17 @@ namespace kfusion
     {
         struct ColorFetcher
         {
-            ColorVolume volume;
+            SemanticVolume volume;
 
             float3 cell_size;
             int n_pts;
             const float4* pts_data;
             Aff3f aff_inv;
 
-            ColorFetcher(const ColorVolume& volume, float3 cell_size);
+            ColorFetcher(const SemanticVolume& volume, float3 cell_size);
 
             __kf_device__
-            void operator()(PtrSz<Color> colors) const
+            void operator()(PtrSz<Color> semantics) const
             {
                 int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -190,26 +190,26 @@ namespace kfusion
                   v.z = __float2int_rd(pv.z / cell_size.z);
 
                   uchar4 rgbw = *volume(v.x, v.y, v.z);
-                  uchar4 *pix = colors.data;
+                  uchar4 *pix = semantics.data;
                   pix[idx] = rgbw; //bgra
                 }
             }
         };
 
-        inline ColorFetcher::ColorFetcher(const ColorVolume& _volume, float3 _cell_size)
+        inline ColorFetcher::ColorFetcher(const SemanticVolume& _volume, float3 _cell_size)
         : volume(_volume), cell_size(_cell_size) {}
 
-        __global__ void fetchColors_kernel (const ColorFetcher colorfetcher, PtrSz<Color> colors)
-        {colorfetcher(colors);};
+        __global__ void fetchSemantics_kernel (const ColorFetcher semanticfetcher, PtrSz<Color> semantics)
+        {semanticfetcher(semantics);};
     }
 }
 
 void
-kfusion::device::fetchColors(const ColorVolume& volume, const Aff3f& aff_inv, const PtrSz<Point>& points, PtrSz<Color>& colors)
+kfusion::device::fetchSemantics(const SemanticVolume& volume, const Aff3f& aff_inv, const PtrSz<Point>& points, PtrSz<Color>& semantics)
 {
     const int block = 256;
 
-    if (points.size != colors.size || points.size == 0)
+    if (points.size != semantics.size || points.size == 0)
         return;
 
     float3 cell_size = make_float3 (volume.voxel_size.x, volume.voxel_size.y, volume.voxel_size.z);
@@ -219,7 +219,7 @@ kfusion::device::fetchColors(const ColorVolume& volume, const Aff3f& aff_inv, co
     cf.pts_data = points.data;
     cf.aff_inv = aff_inv;
 
-    fetchColors_kernel<<<divUp (points.size, block), block>>>(cf, colors);
+    fetchSemantics_kernel<<<divUp (points.size, block), block>>>(cf, semantics);
     cudaSafeCall ( cudaGetLastError () );
     cudaSafeCall (cudaDeviceSynchronize ());
 };

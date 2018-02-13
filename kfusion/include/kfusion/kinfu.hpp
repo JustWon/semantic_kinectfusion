@@ -3,6 +3,7 @@
 #include <kfusion/types.hpp>
 #include <kfusion/cuda/tsdf_volume.hpp>
 #include <kfusion/cuda/color_volume.hpp>
+#include <kfusion/cuda/semantic_volume.hpp>
 #include <kfusion/cuda/projective_icp.hpp>
 #include <vector>
 #include <string>
@@ -74,8 +75,8 @@ namespace kfusion
         const cv::Ptr<cuda::ColorVolume> color_volume() const;
         cv::Ptr<cuda::ColorVolume> color_volume();
 
-        const cv::Ptr<cuda::ColorVolume> semantic_volume() const;
-        cv::Ptr<cuda::ColorVolume> semantic_volume();
+        const cv::Ptr<cuda::SemanticVolume> semantic_volume() const;
+        cv::Ptr<cuda::SemanticVolume> semantic_volume();
 
         const cuda::ProjectiveICP& icp() const;
         cuda::ProjectiveICP& icp();
@@ -107,7 +108,7 @@ namespace kfusion
 
         cv::Ptr<cuda::TsdfVolume> tsdf_volume_;
         cv::Ptr<cuda::ColorVolume> color_volume_;
-        cv::Ptr<cuda::ColorVolume> semantic_volume_;
+        cv::Ptr<cuda::SemanticVolume> semantic_volume_;
         cv::Ptr<cuda::ProjectiveICP> icp_;
     };
 }

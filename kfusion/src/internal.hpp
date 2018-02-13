@@ -72,6 +72,28 @@ namespace kfusion
             ColorVolume& operator=(const ColorVolume&);
         };
 
+        struct SemanticVolume
+        {
+        public:
+            typedef uchar4 elem_type;
+
+            elem_type *const data;
+            const int3 dims;
+            const float3 voxel_size;
+            const float trunc_dist;
+            const int max_weight;
+
+            SemanticVolume(elem_type* data, int3 dims, float3 voxel_size, float trunc_dist, int max_weight);
+            //TsdfVolume(const TsdfVolume&);
+
+            __kf_device__ elem_type* operator()(int x, int y, int z);
+            __kf_device__ const elem_type* operator() (int x, int y, int z) const ;
+            __kf_device__ elem_type* beg(int x, int y) const;
+            __kf_device__ elem_type* zstep(elem_type *const ptr) const;
+        private:
+            SemanticVolume& operator=(const SemanticVolume&);
+        };
+
         struct Projector
         {
             float2 f, c;
@@ -145,6 +167,11 @@ namespace kfusion
         void integrate(const Colors& image, const Dists& depth_map, ColorVolume& volume, const Aff3f& aff, const Projector& proj);
         void fetchColors(const ColorVolume& volume, const Aff3f& aff_inv, const PtrSz<Point>& points, PtrSz<Color>& colors);
 
+        //semantic volume functions
+        void clear_volume(SemanticVolume volume);
+        void integrate(const Colors& image, const Dists& depth_map, SemanticVolume& volume, const Aff3f& aff, const Projector& proj);
+        void fetchSemantics(const SemanticVolume& volume, const Aff3f& aff_inv, const PtrSz<Point>& points, PtrSz<Color>& semantics);
+
         //image proc functions
         void compute_dists(const Depth& depth, Dists dists, float2 f, float2 c);
 
@@ -159,9 +186,8 @@ namespace kfusion
         void computePointNormals(const Reprojector& reproj, const Depth& depth, Points& points, Normals& normals);
 
         void renderImage(const Depth& depth, const Normals& normals, const Reprojector& reproj, const Vec3f& light_pose, Image& image);
-    void renderImage(const Points& points, const Normals& normals, const Reprojector& reproj, const Vec3f& light_pose, Image& image);
+        void renderImage(const Points& points, const Normals& normals, const Reprojector& reproj, const Vec3f& light_pose, Image& image);
         void renderTangentColors(const Normals& normals, Image& image);
-        void renderColors(const Image& in_image);
 
         //exctraction functionality
         size_t extractCloud(const TsdfVolume& volume, const Aff3f& aff, PtrSz<Point> output);

@@ -10,6 +10,7 @@ set(Includes_srcs
 
 set(Includes_cuda_srcs
     include/${module_name}/cuda/color_volume.hpp
+    include/${module_name}/cuda/semantic_volume.hpp
     include/${module_name}/cuda/device_array.hpp
     include/${module_name}/cuda/device_memory.hpp
     include/${module_name}/cuda/imgproc.hpp
@@ -21,6 +22,7 @@ set(Includes_cuda_srcs
 set(Source_srcs
     src/bin_grabber.cpp
     src/color_volume.cpp
+    src/semantic_volume.cpp
     src/core.cpp
     src/device_memory.cpp
     src/imgproc.cpp
@@ -35,6 +37,7 @@ set(Source_srcs
 
 set(Source_cuda_srcs
     src/cuda/color_volume.cu
+    src/cuda/semantic_volume.cu
     src/cuda/device.hpp
     src/cuda/imgproc.cu
     src/cuda/marching_cubes.cu

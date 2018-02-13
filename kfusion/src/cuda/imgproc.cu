@@ -589,16 +589,6 @@ namespace kfusion
     }
 }
 
-void kfusion::device::renderColors(const Image& in_image)
-{
-    // dim3 block (32, 8);
-    // dim3 grid (divUp (in_image.cols(), block.x), divUp (in_image.rows(), block.y));
-
-    // colors_kernel<<<grid, block>>>(in_image, out_image);
-    // cudaSafeCall ( cudaGetLastError () );
-}
-
-
 namespace kfusion
 {
     namespace device

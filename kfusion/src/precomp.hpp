@@ -4,6 +4,7 @@
 #include <kfusion/kinfu.hpp>
 #include <kfusion/cuda/tsdf_volume.hpp>
 #include <kfusion/cuda/color_volume.hpp>
+#include <kfusion/cuda/semantic_volume.hpp>
 #include <kfusion/cuda/marching_cubes.hpp>
 #include <kfusion/cuda/imgproc.hpp>
 #include <kfusion/cuda/projective_icp.hpp>

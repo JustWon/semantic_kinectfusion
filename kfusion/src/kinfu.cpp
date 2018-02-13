@@ -76,7 +76,7 @@ kfusion::KinFu::KinFu(const KinFuParams& params) : frame_counter_(0), params_(pa
     }
 
     if (params.integrate_semantic) {
-        semantic_volume_ = cv::Ptr<cuda::ColorVolume>(new cuda::ColorVolume(params_.semantic_volume_dims));
+        semantic_volume_ = cv::Ptr<cuda::SemanticVolume>(new cuda::SemanticVolume(params_.semantic_volume_dims));
         semantic_volume_->setTruncDist(params_.tsdf_trunc_dist);
         semantic_volume_->setMaxWeight(params_.color_max_weight);
         semantic_volume_->setSize(params_.volume_size);
@@ -121,18 +121,18 @@ cv::Ptr<cuda::ColorVolume> kfusion::KinFu::color_volume ()
     return cv::Ptr<cuda::ColorVolume>();
 }
 
-const cv::Ptr<cuda::ColorVolume> kfusion::KinFu::semantic_volume () const
+const cv::Ptr<cuda::SemanticVolume> kfusion::KinFu::semantic_volume () const
 {
     if (params_.integrate_semantic)
         return semantic_volume_;
-    return cv::Ptr<cuda::ColorVolume>();
+    return cv::Ptr<cuda::SemanticVolume>();
 }
 
-cv::Ptr<cuda::ColorVolume> kfusion::KinFu::semantic_volume ()
+cv::Ptr<cuda::SemanticVolume> kfusion::KinFu::semantic_volume ()
 {
     if (params_.integrate_semantic)
         return semantic_volume_;
-    return cv::Ptr<cuda::ColorVolume>();
+    return cv::Ptr<cuda::SemanticVolume>();
 }
 
 kfusion::cuda::ProjectiveICP& kfusion::KinFu::icp()

@@ -269,7 +269,7 @@ struct KinFuApp
 
       if (kinfu.params().integrate_color)
       {
-          kinfu.semantic_volume()->fetchColors(triangles, color_buffer_);
+          kinfu.semantic_volume()->fetchSemantics(triangles, color_buffer_);
           color_buffer_.download(mesh_colors.ptr<RGB>());
           mesh.colors = mesh_colors;
       }
