@@ -59,6 +59,52 @@ namespace kfusion
 
             float tranc_dist_inv;
 
+            int palette[22][3] = {
+                {0, 0, 0},
+                {128, 0, 0},
+                {0, 128, 0},
+                {128, 128, 0},
+                {0, 0, 128},
+                {128, 0, 128},
+                {0, 128, 128},
+                {128, 128, 128},
+                {64, 0, 0},
+                {192, 0, 0},
+                {64, 128, 0},
+                {192, 128, 0},
+                {64, 0, 128},
+                {192, 0, 128},
+                {64, 128, 128},
+                {192, 128, 128},
+                {0, 64, 0},
+                {128, 64, 0},
+                {0, 192, 0},
+                {128, 192, 0},
+                {0, 64, 12}
+            };
+
+            __kf_device__
+            uchar color2label(uchar4 color) const
+            {
+                for(int i = 0 ; i < 21 ; i++)
+                {
+                    if (color.x == palette[i][0] &&
+                        color.y == palette[i][1] &&
+                        color.z == palette[i][2])
+                    {
+                        return i;
+                    }
+                }
+                return 0;
+            }
+
+            __kf_device__
+            uchar4 label2color(uchar label) const
+            {
+                uchar4 color = make_uchar4(palette[label][0], palette[label][1], palette[label][2], 0);
+                return color;
+            }
+
             __kf_device__
             void operator()(SemanticVolume& volume) const
             {
@@ -74,7 +120,8 @@ namespace kfusion
                 float3 vc = vol2cam * vx; //tranform from volume coo frame to camera one
 
                 SemanticVolume::elem_type* vptr = volume.beg(x, y);
-                for(int i = 0; i < volume.dims.z; ++i, vc += zstep, vptr = volume.zstep(vptr))
+                SemanticVolume::elem_type* hptr = volume.hist_beg(x, y);
+                for(int i = 0; i < volume.dims.z; ++i, vc += zstep, vptr = volume.zstep(vptr), hptr = volume.hist_zstep(hptr))
                 {
                     float2 coo = proj(vc); // project to image coordinate
                     // check wether coo in inside the image boundaries
@@ -98,24 +145,43 @@ namespace kfusion
                             // Average with new value and weight
                             uchar4 rgb = tex2D(image_tex, coo.x, coo.y);
                             const float Wrk = 1.f;
-                            
-                            float new_x =  __fdividef(__fmaf_rn(volume_rgbw.x, weight_prev, rgb.x), weight_prev + Wrk);
-                            //uchar new_x = (volume_rgbw.x * weight_prev + Wrk * rgb.x) / (weight_prev + Wrk);
-                            float new_y =  __fdividef(__fmaf_rn(volume_rgbw.y, weight_prev, rgb.y), weight_prev + Wrk);
-                            //uchar new_y = (volume_rgbw.y * weight_prev + Wrk * rgb.y) / (weight_prev + Wrk);
-                            float new_z =  __fdividef(__fmaf_rn(volume_rgbw.z, weight_prev, rgb.z), weight_prev + Wrk);
-                            //uchar new_z = (volume_rgbw.z * weight_prev + Wrk * rgb.z) / (weight_prev + Wrk);
 
-                            int weight_new = min(weight_prev + 1, 255);
+                            uchar class_idx = color2label(rgb);
+                            uchar count = *((uchar*)hptr+class_idx);
+                            *((uchar*)hptr+class_idx) = count + 1;
 
-                            uchar4 volume_rgbw_new;
-                            volume_rgbw_new.x = (uchar)__float2int_rn(new_x);
-                            volume_rgbw_new.y = (uchar)__float2int_rn(new_y);
-                            volume_rgbw_new.z = (uchar)__float2int_rn(new_z);
-                            volume_rgbw_new.w = min(volume.max_weight, weight_new);
+                            uchar *hist_pointer = (uchar*)hptr;
+                            int max_cnt = -1000; uchar max_idx = -1;
+                            for (int cur_idx = 0 ; cur_idx < 4 ; cur_idx++)
+                            {
+                                uchar cur_cnt = *(hist_pointer+cur_idx);
+                                if(cur_cnt > max_cnt)
+                                {
+                                    max_cnt = cur_cnt;
+                                    max_idx = cur_idx;
+                                }
+                            }
+
+                            uchar4 class_color = label2color(4);
+                            *vptr = class_color;
+
+                            // float new_x =  __fdividef(__fmaf_rn(volume_rgbw.x, weight_prev, rgb.x), weight_prev + Wrk);
+                            // //uchar new_x = (volume_rgbw.x * weight_prev + Wrk * rgb.x) / (weight_prev + Wrk);
+                            // float new_y =  __fdividef(__fmaf_rn(volume_rgbw.y, weight_prev, rgb.y), weight_prev + Wrk);
+                            // //uchar new_y = (volume_rgbw.y * weight_prev + Wrk * rgb.y) / (weight_prev + Wrk);
+                            // float new_z =  __fdividef(__fmaf_rn(volume_rgbw.z, weight_prev, rgb.z), weight_prev + Wrk);
+                            // //uchar new_z = (volume_rgbw.z * weight_prev + Wrk * rgb.z) / (weight_prev + Wrk);
+
+                            // int weight_new = min(weight_prev + 1, 255);
+
+                            // uchar4 volume_rgbw_new;
+                            // volume_rgbw_new.x = (uchar)__float2int_rn(new_x);
+                            // volume_rgbw_new.y = (uchar)__float2int_rn(new_y);
+                            // volume_rgbw_new.z = (uchar)__float2int_rn(new_z);
+                            // volume_rgbw_new.w = min(volume.max_weight, weight_new);
 
                             // Write back
-                            *vptr = volume_rgbw_new;
+                            // *vptr = volume_rgbw_new;
                         }
                     } // in camera image range
                 } // for (int i=0; i<volume.dims.z; ++i, vc += zstep, vptr = volume.zstep(vptr))

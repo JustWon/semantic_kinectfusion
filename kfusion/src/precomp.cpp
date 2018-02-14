@@ -45,8 +45,8 @@ kfusion::device::ColorVolume::ColorVolume(elem_type* _data, int3 _dims, float3 _
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// SemanticVolume host implementation
 
-kfusion::device::SemanticVolume::SemanticVolume(elem_type* _data, int3 _dims, float3 _voxel_size, float _trunc_dist, int _max_weight)
-    : data(_data), dims(_dims), voxel_size(_voxel_size), trunc_dist(_trunc_dist), max_weight(_max_weight) {}
+kfusion::device::SemanticVolume::SemanticVolume(elem_type* _data, elem_type* _label_histogram, int3 _dims, float3 _voxel_size, float _trunc_dist, int _max_weight)
+    : data(_data), label_histogram(_label_histogram), dims(_dims), voxel_size(_voxel_size), trunc_dist(_trunc_dist), max_weight(_max_weight) {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Projector host implementation
