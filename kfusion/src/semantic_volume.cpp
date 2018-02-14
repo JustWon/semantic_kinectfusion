@@ -43,11 +43,11 @@ void kfusion::cuda::SemanticVolume::create(const Vec3i& dims)
     data_.create(voxels_number * 4 * sizeof(unsigned char));
     setTruncDist(trunc_dist_);
 
-    int class_size=15;
-    label_histogram_.create(voxels_number*class_size*sizeof(unsigned char));
+    int class_size1=10;
+    int class_size2=11;
+    label_histogram_.create(voxels_number*class_size1*sizeof(unsigned char));
+    label_histogram2_.create(voxels_number*class_size2*sizeof(unsigned char));
     clear();
-
-   
 }
 
 #pragma mark -
@@ -73,7 +73,7 @@ void kfusion::cuda::SemanticVolume::clear()
     device::Vec3i dims = device_cast<device::Vec3i>(dims_);
     device::Vec3f vsz  = device_cast<device::Vec3f>(getVoxelSize());
 
-    device::SemanticVolume volume(data_.ptr<uchar4>(), label_histogram_.ptr<uchar>(), dims, vsz, trunc_dist_, max_weight_);
+    device::SemanticVolume volume(data_.ptr<uchar4>(), label_histogram_.ptr<uchar>(), label_histogram2_.ptr<uchar>(), dims, vsz, trunc_dist_, max_weight_);
     device::clear_volume(volume);
 }
 
@@ -99,7 +99,7 @@ void kfusion::cuda::SemanticVolume::integrate(const Image& rgb_image,
     device::Vec3f vsz  = device_cast<device::Vec3f>(getVoxelSize());
     device::Aff3f aff = device_cast<device::Aff3f>(vol2cam);
 
-    device::SemanticVolume volume(data_.ptr<uchar4>(), label_histogram_.ptr<uchar>(), dims, vsz, trunc_dist_, max_weight_);
+    device::SemanticVolume volume(data_.ptr<uchar4>(), label_histogram_.ptr<uchar>(), label_histogram2_.ptr<uchar>(), dims, vsz, trunc_dist_, max_weight_);
     device::integrate(rgb_image, depth_map, volume, aff, proj);
 }
 
@@ -126,6 +126,6 @@ void kfusion::cuda::SemanticVolume::fetchSemantics(const DeviceArray<Point>& clo
     device::Vec3f vsz  = device_cast<device::Vec3f>(getVoxelSize());
     device::Aff3f aff_inv  = device_cast<device::Aff3f>(pose_inv);
 
-    device::SemanticVolume volume((uchar4*)data_.ptr<uchar4>(), (uchar*)label_histogram_.ptr<uchar>(), dims, vsz, trunc_dist_, max_weight_);
+    device::SemanticVolume volume((uchar4*)data_.ptr<uchar4>(), (uchar*)label_histogram_.ptr<uchar>(), (uchar*)label_histogram2_.ptr<uchar>(), dims, vsz, trunc_dist_, max_weight_);
     device::fetchSemantics(volume, aff_inv, pts, col);
 }

@@ -79,12 +79,13 @@ namespace kfusion
 
             elem_type *const data;
             uchar *const label_histogram;
+            uchar *const label_histogram2;
             const int3 dims;
             const float3 voxel_size;
             const float trunc_dist;
             const int max_weight;
 
-            SemanticVolume(elem_type* data, uchar* label_histogram, int3 dims, float3 voxel_size, float trunc_dist, int max_weight);
+            SemanticVolume(elem_type* data, uchar* label_histogram, uchar* label_histogram2, int3 dims, float3 voxel_size, float trunc_dist, int max_weight);
             // change precomp.hpp too
 
             __kf_device__ elem_type* operator()(int x, int y, int z);
@@ -93,6 +94,8 @@ namespace kfusion
             __kf_device__ elem_type* zstep(elem_type *const ptr) const;
             __kf_device__ unsigned char* hist_beg(int x, int y) const;
             __kf_device__ unsigned char* hist_zstep(unsigned char *const ptr) const;
+            __kf_device__ unsigned char* hist2_beg(int x, int y) const;
+            __kf_device__ unsigned char* hist2_zstep(unsigned char *const ptr) const;
         private:
             SemanticVolume& operator=(const SemanticVolume&);
         };

@@ -27,13 +27,19 @@ namespace kfusion
                     *pos = make_uchar4 (0, 0, 0, 0);
 
                 ////////////////////
-                int class_size = 15;
+                int class_size1 = 10;
                 uchar *hist_beg = semantic.hist_beg(x, y);
-                uchar *hist_end = hist_beg + class_size*(semantic.dims.x * semantic.dims.y * semantic.dims.z);
-
+                uchar *hist_end = hist_beg + class_size1*(semantic.dims.x * semantic.dims.y * semantic.dims.z);
                 for(uchar* hist_pos = hist_beg; hist_pos != hist_end; hist_pos = semantic.hist_zstep(hist_pos))
-                    for(int i = 0 ; i < class_size ; i++)
+                    for(int i = 0 ; i < class_size1 ; i++)
                         *(hist_beg+i) = 0;
+
+                int class_size2 = 11;
+                uchar* hist_beg2 = semantic.hist2_beg(x, y);
+                uchar* hist_end2 = hist_beg2 + class_size2*(semantic.dims.x * semantic.dims.y * semantic.dims.z);
+                for(uchar* hist_pos2 = hist_beg2; hist_pos2 != hist_end2; hist_pos2 = semantic.hist2_zstep(hist_pos2))
+                    for(int i = 0 ; i < class_size2 ; i++)
+                        *(hist_beg2+i) = 0;
             }
         }
     }
@@ -68,7 +74,7 @@ namespace kfusion
 
             float tranc_dist_inv;
 
-            int palette[22][3] = {
+            int palette[21][3] = {
                 {0, 0, 0},
                 {128, 0, 0},
                 {0, 128, 0},
@@ -97,9 +103,9 @@ namespace kfusion
             {
                 for(int i = 0 ; i < 21 ; i++)
                 {
-                    if (color.x == palette[i][0] &&
+                    if (color.x == palette[i][2] &&
                         color.y == palette[i][1] &&
-                        color.z == palette[i][2])
+                        color.z == palette[i][0])
                     {
                         return i;
                     }
@@ -110,7 +116,8 @@ namespace kfusion
             __kf_device__
             uchar4 label2color(uchar label) const
             {
-                uchar4 color = make_uchar4(palette[label][0], palette[label][1], palette[label][2], 0);
+                // uchar4 color = make_uchar4(palette[label][0], palette[label][1], palette[label][2], 0);
+                uchar4 color = make_uchar4(palette[label][2], palette[label][1], palette[label][0], 0);
                 return color;
             }
 
@@ -130,7 +137,9 @@ namespace kfusion
 
                 SemanticVolume::elem_type* vptr = volume.beg(x, y);
                 unsigned char* hptr = volume.hist_beg(x, y);
-                for(int i = 0; i < volume.dims.z; ++i, vc += zstep, vptr = volume.zstep(vptr), hptr = volume.hist_zstep(hptr))
+                unsigned char* hptr2 = volume.hist2_beg(x, y);
+                for(int i = 0; i < volume.dims.z; ++i, vc += zstep, vptr = volume.zstep(vptr), hptr = volume.hist_zstep(hptr), hptr2 = volume.hist2_zstep(hptr2))
+                // for(int i = 0; i < volume.dims.z; ++i, vc += zstep, vptr = volume.zstep(vptr), hptr = volume.hist_zstep(hptr))
                 {
                     float2 coo = proj(vc); // project to image coordinate
                     // check wether coo in inside the image boundaries
@@ -147,29 +156,42 @@ namespace kfusion
                         update = (sdf > -volume.trunc_dist) && (sdf < volume.trunc_dist);
                         if (update)
                         {
-                            // Read the existing value and weight
-                            uchar4 volume_rgbw = *vptr;
-                            int weight_prev = volume_rgbw.w;
-
                             // Average with new value and weight
                             uchar4 rgb = tex2D(image_tex, coo.x, coo.y);
-                            const float Wrk = 1.f;
 
                             uchar class_idx = color2label(rgb);
-                            uchar count = *((uchar*)hptr+class_idx);
-                            *((uchar*)hptr+class_idx) = count + 1;
 
-                            int class_size = 15;
+                            if (0 <= class_idx && class_idx <= 9)
+                            {
+                                uchar count = *((uchar*)hptr+class_idx);
+                                *((uchar*)hptr+class_idx) = count + 1;
+                            }
+                            else if (10 <= class_idx && class_idx <= 20){
+                                uchar count = *((uchar*)hptr2+(class_idx-10));
+                                *((uchar*)hptr2+(class_idx-10)) = count + 1;
+                            }
+                            
+                            int class_size1 = 10;
                             uchar *hist_pointer = (uchar*)hptr;
                             int max_cnt = -1000; uchar max_idx = -1;
-
-                            for (int cur_idx = 0 ; cur_idx < class_size ; cur_idx++)
+                            for (int cur_idx = 0 ; cur_idx < class_size1 ; cur_idx++)
                             {
                                 uchar cur_cnt = *(hist_pointer+cur_idx);
                                 if(cur_cnt > max_cnt)
                                 {
                                     max_cnt = cur_cnt;
                                     max_idx = cur_idx;
+                                }
+                            }
+                            int class_size2 = 11;
+                            uchar *hist2_pointer = (uchar*)hptr2;
+                            for (int cur_idx = 0 ; cur_idx < class_size2 ; cur_idx++)
+                            {
+                                uchar cur_cnt = *(hist2_pointer+cur_idx);
+                                if(cur_cnt > max_cnt)
+                                {
+                                    max_cnt = cur_cnt;
+                                    max_idx = (cur_idx+10);
                                 }
                             }
 

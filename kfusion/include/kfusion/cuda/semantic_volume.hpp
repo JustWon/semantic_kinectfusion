@@ -190,6 +190,7 @@ namespace kfusion
             /**< Memory on the device */
             CudaData data_;
             CudaData label_histogram_;
+            CudaData label_histogram2_;
             /**< The truncation distance of the volume */
             float trunc_dist_;
             /**< Maximum weight */
