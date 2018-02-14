@@ -64,11 +64,17 @@ __kf_device__ kfusion::device::SemanticVolume::elem_type* kfusion::device::Seman
 __kf_device__ kfusion::device::SemanticVolume::elem_type* kfusion::device::SemanticVolume::zstep(elem_type *const ptr) const
 { return ptr + dims.x * dims.y; }
 
-__kf_device__ kfusion::device::SemanticVolume::elem_type* kfusion::device::SemanticVolume::hist_beg(int x, int y) const
-{ return label_histogram + x + dims.x * y; }
+__kf_device__ unsigned char* kfusion::device::SemanticVolume::hist_beg(int x, int y) const
+{ 
+    int class_size = 10;
+    return label_histogram + class_size*(x + dims.x * y); 
+}
 
-__kf_device__ kfusion::device::SemanticVolume::elem_type* kfusion::device::SemanticVolume::hist_zstep(elem_type *const ptr) const
-{ return ptr + dims.x * dims.y; }
+__kf_device__ unsigned char* kfusion::device::SemanticVolume::hist_zstep(unsigned char *const ptr) const
+{ 
+    int class_size = 10;
+    return ptr + class_size*(dims.x * dims.y); 
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////

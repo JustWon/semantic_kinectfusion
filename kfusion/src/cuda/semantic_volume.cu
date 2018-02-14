@@ -25,6 +25,15 @@ namespace kfusion
 
                 for(uchar4* pos = beg; pos != end; pos = semantic.zstep(pos))
                     *pos = make_uchar4 (0, 0, 0, 0);
+
+                ////////////////////
+                int class_size = 10;
+                uchar *hist_beg = semantic.hist_beg(x, y);
+                uchar *hist_end = hist_beg + class_size*(semantic.dims.x * semantic.dims.y * semantic.dims.z);
+
+                for(uchar* hist_pos = hist_beg; hist_pos != hist_end; hist_pos = semantic.hist_zstep(hist_pos))
+                    for(int i = 0 ; i < class_size ; i++)
+                        *(hist_beg+i) = 0;
             }
         }
     }
@@ -120,7 +129,7 @@ namespace kfusion
                 float3 vc = vol2cam * vx; //tranform from volume coo frame to camera one
 
                 SemanticVolume::elem_type* vptr = volume.beg(x, y);
-                SemanticVolume::elem_type* hptr = volume.hist_beg(x, y);
+                unsigned char* hptr = volume.hist_beg(x, y);
                 for(int i = 0; i < volume.dims.z; ++i, vc += zstep, vptr = volume.zstep(vptr), hptr = volume.hist_zstep(hptr))
                 {
                     float2 coo = proj(vc); // project to image coordinate
@@ -150,9 +159,10 @@ namespace kfusion
                             uchar count = *((uchar*)hptr+class_idx);
                             *((uchar*)hptr+class_idx) = count + 1;
 
+                            int class_size = 10;
                             uchar *hist_pointer = (uchar*)hptr;
                             int max_cnt = -1000; uchar max_idx = -1;
-                            for (int cur_idx = 0 ; cur_idx < 4 ; cur_idx++)
+                            for (int cur_idx = 0 ; cur_idx < class_size ; cur_idx++)
                             {
                                 uchar cur_cnt = *(hist_pointer+cur_idx);
                                 if(cur_cnt > max_cnt)
@@ -162,7 +172,7 @@ namespace kfusion
                                 }
                             }
 
-                            uchar4 class_color = label2color(4);
+                            uchar4 class_color = label2color(max_idx);
                             *vptr = class_color;
 
                             // float new_x =  __fdividef(__fmaf_rn(volume_rgbw.x, weight_prev, rgb.x), weight_prev + Wrk);
@@ -180,7 +190,7 @@ namespace kfusion
                             // volume_rgbw_new.z = (uchar)__float2int_rn(new_z);
                             // volume_rgbw_new.w = min(volume.max_weight, weight_new);
 
-                            // Write back
+                            // // Write back
                             // *vptr = volume_rgbw_new;
                         }
                     } // in camera image range
