@@ -162,6 +162,7 @@ namespace kfusion
                             int class_size = 10;
                             uchar *hist_pointer = (uchar*)hptr;
                             int max_cnt = -1000; uchar max_idx = -1;
+                            
                             for (int cur_idx = 0 ; cur_idx < class_size ; cur_idx++)
                             {
                                 uchar cur_cnt = *(hist_pointer+cur_idx);
