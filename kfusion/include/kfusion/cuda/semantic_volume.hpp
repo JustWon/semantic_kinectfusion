@@ -182,7 +182,6 @@ namespace kfusion
 
             // virtual void raycast(const Affine3f& camera_pose, const TsdfVolume& tsdf_volume, const Intr& intr, Cloud& semantics);
 
-
         private:
 
 #pragma mark -
