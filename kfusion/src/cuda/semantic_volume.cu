@@ -27,7 +27,7 @@ namespace kfusion
                     *pos = make_uchar4 (0, 0, 0, 0);
 
                 ////////////////////
-                int class_size = 10;
+                int class_size = 15;
                 uchar *hist_beg = semantic.hist_beg(x, y);
                 uchar *hist_end = hist_beg + class_size*(semantic.dims.x * semantic.dims.y * semantic.dims.z);
 
@@ -89,7 +89,7 @@ namespace kfusion
                 {128, 64, 0},
                 {0, 192, 0},
                 {128, 192, 0},
-                {0, 64, 12}
+                {0, 64, 128}
             };
 
             __kf_device__
@@ -159,9 +159,10 @@ namespace kfusion
                             uchar count = *((uchar*)hptr+class_idx);
                             *((uchar*)hptr+class_idx) = count + 1;
 
-                            int class_size = 10;
+                            int class_size = 15;
                             uchar *hist_pointer = (uchar*)hptr;
                             int max_cnt = -1000; uchar max_idx = -1;
+
                             for (int cur_idx = 0 ; cur_idx < class_size ; cur_idx++)
                             {
                                 uchar cur_cnt = *(hist_pointer+cur_idx);
@@ -174,24 +175,6 @@ namespace kfusion
 
                             uchar4 class_color = label2color(max_idx);
                             *vptr = class_color;
-
-                            // float new_x =  __fdividef(__fmaf_rn(volume_rgbw.x, weight_prev, rgb.x), weight_prev + Wrk);
-                            // //uchar new_x = (volume_rgbw.x * weight_prev + Wrk * rgb.x) / (weight_prev + Wrk);
-                            // float new_y =  __fdividef(__fmaf_rn(volume_rgbw.y, weight_prev, rgb.y), weight_prev + Wrk);
-                            // //uchar new_y = (volume_rgbw.y * weight_prev + Wrk * rgb.y) / (weight_prev + Wrk);
-                            // float new_z =  __fdividef(__fmaf_rn(volume_rgbw.z, weight_prev, rgb.z), weight_prev + Wrk);
-                            // //uchar new_z = (volume_rgbw.z * weight_prev + Wrk * rgb.z) / (weight_prev + Wrk);
-
-                            // int weight_new = min(weight_prev + 1, 255);
-
-                            // uchar4 volume_rgbw_new;
-                            // volume_rgbw_new.x = (uchar)__float2int_rn(new_x);
-                            // volume_rgbw_new.y = (uchar)__float2int_rn(new_y);
-                            // volume_rgbw_new.z = (uchar)__float2int_rn(new_z);
-                            // volume_rgbw_new.w = min(volume.max_weight, weight_new);
-
-                            // // Write back
-                            // *vptr = volume_rgbw_new;
                         }
                     } // in camera image range
                 } // for (int i=0; i<volume.dims.z; ++i, vc += zstep, vptr = volume.zstep(vptr))

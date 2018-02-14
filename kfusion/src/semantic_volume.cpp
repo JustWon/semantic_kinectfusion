@@ -42,7 +42,9 @@ void kfusion::cuda::SemanticVolume::create(const Vec3i& dims)
     int voxels_number = dims_[0] * dims_[1] * dims_[2];
     data_.create(voxels_number * 4 * sizeof(unsigned char));
     setTruncDist(trunc_dist_);
-    label_histogram_.create(voxels_number*10*sizeof(unsigned char));
+
+    int class_size=15;
+    label_histogram_.create(voxels_number*class_size*sizeof(unsigned char));
     clear();
 
    

@@ -75,6 +75,10 @@ public:
         depth_file_name = depth_files[idx];
         semantic_file_name = semantic_files[idx];
 
+        // std::cout << color_file_name << std::endl;
+        // std::cout << depth_file_name << std::endl;
+        // std::cout << semantic_file_name << std::endl;
+
         depth = cv::imread(depth_file_name, CV_LOAD_IMAGE_ANYDEPTH);
         for (int y = 0 ; y < depth.rows ; y++)
         for (int x = 0 ; x < depth.cols ; x++)
@@ -90,7 +94,7 @@ public:
 
         // cv::imshow("color",color);
         // cv::imshow("depth",depth);
-        // cv::imshow("semantic",semantic
+        // cv::imshow("semantic",semantic);
 
         if (idx++ > seq_n)
         {
@@ -383,16 +387,19 @@ int main (int argc, char* argv[])
   cuda::setDevice (device);
   cuda::printShortCudaDeviceInfo (device);
 
-  // string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_cabinet/rgbd_dataset_freiburg3_cabinet/";
-  // float magic_factor = 1;
-  // float volume_size = 10.0f;
-
   string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_teddy/rgbd_dataset_freiburg3_teddy/";
   float magic_factor = 1;
   float volume_size = 10.0f;
   int img_cols = 640;
   int img_rows = 480;
   float focal_length = 525.0f;
+
+  // string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg1_teddy/rgbd_dataset_freiburg1_teddy/";
+  // float magic_factor = 1;
+  // float volume_size = 10.0f;
+  // int img_cols = 640;
+  // int img_rows = 480;
+  // float focal_length = 525.0f;
 
   // string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg1_plant/rgbd_dataset_freiburg1_plant/";
   // float magic_factor = 1;
