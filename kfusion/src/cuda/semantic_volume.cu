@@ -110,7 +110,7 @@ namespace kfusion
                         return i;
                     }
                 }
-                return 0;
+                return -1;
             }
 
             __kf_device__
@@ -139,7 +139,6 @@ namespace kfusion
                 unsigned char* hptr = volume.hist_beg(x, y);
                 unsigned char* hptr2 = volume.hist2_beg(x, y);
                 for(int i = 0; i < volume.dims.z; ++i, vc += zstep, vptr = volume.zstep(vptr), hptr = volume.hist_zstep(hptr), hptr2 = volume.hist2_zstep(hptr2))
-                // for(int i = 0; i < volume.dims.z; ++i, vc += zstep, vptr = volume.zstep(vptr), hptr = volume.hist_zstep(hptr))
                 {
                     float2 coo = proj(vc); // project to image coordinate
                     // check wether coo in inside the image boundaries
@@ -171,6 +170,7 @@ namespace kfusion
                                 *((uchar*)hptr2+(class_idx-10)) = count + 1;
                             }
                             
+                            // maximum class index
                             int class_size1 = 10;
                             uchar *hist_pointer = (uchar*)hptr;
                             int max_cnt = -1000; uchar max_idx = -1;
