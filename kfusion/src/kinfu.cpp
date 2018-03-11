@@ -3,9 +3,20 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
+
+#include <g2o/core/sparse_optimizer.h>
+#include <g2o/core/solver.h>
+#include <g2o/core/block_solver.h>
+#include <g2o/core/optimization_algorithm_levenberg.h>
+#include <g2o/solvers/dense/linear_solver_dense.h>
+#include <g2o/solvers/csparse/linear_solver_csparse.h>
+#include <g2o/types/slam3d/vertex_se3.h>
+#include <g2o/types/slam3d/edge_se3.h>
+
 using namespace std;
 using namespace kfusion;
 using namespace kfusion::cuda;
+using namespace g2o;
 
 static inline float deg2rad (float alpha) { return alpha * 0.017453293f; }
 
@@ -87,6 +98,41 @@ kfusion::KinFu::KinFu(const KinFuParams& params) : frame_counter_(0), params_(pa
     icp_->setDistThreshold(params_.icp_dist_thres);
     icp_->setAngleThreshold(params_.icp_angle_thres);
     icp_->setIterationsNum(params_.icp_iter_num);
+
+    /*********************************************************************************
+    * creating the optimization problem
+    ********************************************************************************/
+    // typedef BlockSolver< BlockSolverTraits<-1, -1> >  SlamBlockSolver;
+    // typedef LinearSolverCSparse<SlamBlockSolver::PoseMatrixType> SlamLinearSolver;
+
+    // // allocating the optimizer
+    // auto linearSolver = g2o::make_unique<SlamLinearSolver>();
+    // linearSolver->setBlockOrdering(false);
+    // OptimizationAlgorithmGaussNewton* solver = new OptimizationAlgorithmGaussNewton(
+    // g2o::make_unique<SlamBlockSolver>(std::move(linearSolver)));
+
+    // typedef g2o::BlockSolver_6_3 BlockSolver;
+    // typedef g2o::LinearSolverCSparse<BlockSolver::PoseMatrixType> LinearSolver;
+
+    std::unique_ptr<g2o::BlockSolver_6_3::LinearSolverType> linearSolver;
+    linearSolver = g2o::make_unique<g2o::LinearSolverDense<g2o::BlockSolver_6_3::PoseMatrixType>>();
+    g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(
+        g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolver))
+    );
+
+    graph_.setAlgorithm(solver);
+    graph_.setVerbose(true);
+
+    Eigen::Isometry3d p;
+    p.setIdentity();
+    VertexSE3* v = new VertexSE3();
+    v->setId(vertex_id);
+    v->setFixed(true);
+    v->setEstimate(p);  
+    v->setMarginalized(false);
+    graph_.addVertex(v);
+    vertex_id++;
+    previous_vertex_ = v;
 
     allocate_buffers();
     reset();
@@ -247,6 +293,48 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
     {
         //ScopeTime time("icp");
         bool ok = icp_->estimateTransform(affine, p.intr, curr_.points_pyr, curr_.normals_pyr, prev_.points_pyr, prev_.normals_pyr);
+
+        Eigen::Isometry3d edge_con;
+
+        Eigen::Matrix3d rot1;
+        cv::Affine3f::Mat3 rot2 = affine.rotation();
+        rot1 << rot2(0,0),rot2(0,1),rot2(0,2),rot2(1,0),rot2(1,1),rot2(1,2),rot2(2,0),rot2(2,1),rot2(2,2);
+
+        Eigen::Vector3d trans1;
+        cv::Affine3f::Vec3 trans2 = affine.translation();
+        trans1 << trans2(0), trans2(1), trans2(2);
+        
+        edge_con.rotation() = rot1;   <--??
+        edge_con.translation() = trans1;
+
+        VertexSE3* v = new VertexSE3();
+        v->setEstimate(previous_vertex_->estimate() * edge_con);
+        v->setId(vertex_id);
+        v->setMarginalized(false);
+        graph_.addVertex(v);
+        previous_vertex_ = v;
+
+        EdgeSE3* e = new EdgeSE3();
+        e->setId(edge_id);  
+        e->setMeasurement(edge_con);
+        // e->setRobustKernel(createRobustKernel());
+        // Eigen::Matrix<double, 6, 6> info_matrix;
+        // info_matrix.setIdentity();
+        // e->setInformation(info_matrix);
+        e->resize(2);
+        e->setVertex(0, graph_.vertex(vertex_id-1));
+        e->setVertex(1, graph_.vertex(vertex_id));
+        graph_.addEdge(e);
+
+        vertex_id++;edge_id++;
+
+        // cout << (edge_con.translation()(0)) << " " <<
+        //         (edge_con.translation()(1)) << " " << 
+        //         (edge_con.translation()(2)) << endl;
+
+        graph_.initializeOptimization();
+        graph_.computeInitialGuess();
+        graph_.optimize(10);
 
         if (!ok)
             return reset(), false;

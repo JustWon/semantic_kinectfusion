@@ -8,6 +8,10 @@
 #include <vector>
 #include <string>
 
+#include "g2o/core/sparse_optimizer.h"
+#include <g2o/types/slam3d/vertex_se3.h>
+#include <g2o/types/slam3d/edge_se3.h>
+
 namespace kfusion
 {
     namespace cuda
@@ -110,5 +114,11 @@ namespace kfusion
         cv::Ptr<cuda::ColorVolume> color_volume_;
         cv::Ptr<cuda::SemanticVolume> semantic_volume_;
         cv::Ptr<cuda::ProjectiveICP> icp_;
+
+        // g2o 
+        g2o::SparseOptimizer graph_;
+        g2o::VertexSE3 *previous_vertex_, *current_vertex;
+        int vertex_id = 0;
+        int edge_id = 0;
     };
 }

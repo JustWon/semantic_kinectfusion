@@ -14,6 +14,8 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 include(cmake/Utils.cmake)
 include(cmake/Targets.cmake)
 
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+
 # Find OpenMP
 # the gcc-4.2.1 coming with MacOS X is not compatible with the OpenMP pragmas we use, so disabling OpenMP for it
 # if((NOT (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")) OR (NOT CMAKE_COMPILER_IS_GNUCXX) OR (GCC_VERSION VERSION_GREATER 4.2.1) OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
@@ -39,8 +41,14 @@ include(cmake/Targets.cmake)
 # ---[ find dependencies
 find_package(OpenCV REQUIRED COMPONENTS core viz highgui)
 find_package(CUDA 5.0 REQUIRED)
+find_package(CSparse REQUIRED)
+FIND_PACKAGE(OpenGL REQUIRED)
+FIND_PACKAGE(GLUT REQUIRED)
 
-include_directories(${OpenCV_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS})
+include_directories(
+	${OpenCV_INCLUDE_DIRS} 
+	${CUDA_INCLUDE_DIRS}
+)
 
 # ---[ misc settings
 if(USE_PROJECT_FOLDERS)

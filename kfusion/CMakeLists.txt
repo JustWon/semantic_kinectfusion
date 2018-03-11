@@ -53,7 +53,15 @@ if(OPENNI_FOUND)
         include/io/capture.hpp)
 endif(OPENNI_FOUND)
 
-include_directories(include include/kfusion/cuda/ src src/cuda)
+include_directories(
+    ${CSPARSE_INCLUDE_DIR}
+    ${OPENGL_INCLUDE_DIR}
+    ${GLUT_INCLUDE_DIRS}
+    include 
+    include/kfusion/cuda/ 
+    src 
+    src/cuda
+)
 
 set(__has_cuda OFF)
 check_cuda(__has_cuda)
@@ -90,7 +98,19 @@ install(TARGETS ${module_name}
 
 install(DIRECTORY include/ DESTINATION include/ FILES_MATCHING PATTERN "*.h*")
 
-target_link_libraries(kfusion ${CUDA_LIBRARIES} ${CUDA_CUDA_LIBRARY} ${OpenCV_LIBS})
+target_link_libraries(
+    kfusion 
+    ${CSPARSE_LIBRARY}
+    /home/dongwonshin/Desktop/g2o/lib/libg2o_core_d.a
+    /home/dongwonshin/Desktop/g2o/lib/libg2o_stuff_d.a
+    /home/dongwonshin/Desktop/g2o/lib/libg2o_csparse_extension_d.a
+    /home/dongwonshin/Desktop/g2o/lib/libg2o_opengl_helper_d.a
+    /home/dongwonshin/Desktop/g2o/lib/libg2o_types_slam3d_d.a
+    ${OPENGL_LIBRARIES} ${GLUT_LIBRARY}
+    ${CUDA_LIBRARIES} 
+    ${CUDA_CUDA_LIBRARY} 
+    ${OpenCV_LIBS}
+)
 
 if (OPENNI_FOUND)
     target_link_libraries(kfusion ${OPENNI_LIBRARY})

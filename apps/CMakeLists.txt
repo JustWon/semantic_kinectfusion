@@ -1,4 +1,6 @@
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../kfusion/include/)
+include_directories(
+	${CMAKE_CURRENT_SOURCE_DIR}/../kfusion/include/
+)
 
 # Not recommended by CMake to use GLOB
 # file(GLOB srcs *.cpp *.hpp)
@@ -19,7 +21,12 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../kfusion/include/)
 
 # APP 02: BinGrabber capture
 add_executable(demo_bin demo_bin.cpp)
-target_link_libraries(demo_bin ${OpenCV_LIBS} kfusion)
+target_link_libraries(
+	demo_bin 
+	${OpenCV_LIBS} 
+	kfusion
+)
+
 
 set_target_properties(demo_bin PROPERTIES
         DEBUG_POSTFIX "d"
