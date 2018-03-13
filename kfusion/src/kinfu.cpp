@@ -13,6 +13,9 @@
 #include <g2o/types/slam3d/vertex_se3.h>
 #include <g2o/types/slam3d/edge_se3.h>
 
+#include <fstream>
+using std::ofstream;
+
 using namespace std;
 using namespace kfusion;
 using namespace kfusion::cuda;
@@ -102,17 +105,6 @@ kfusion::KinFu::KinFu(const KinFuParams& params) : frame_counter_(0), params_(pa
     /*********************************************************************************
     * creating the optimization problem
     ********************************************************************************/
-    // typedef BlockSolver< BlockSolverTraits<-1, -1> >  SlamBlockSolver;
-    // typedef LinearSolverCSparse<SlamBlockSolver::PoseMatrixType> SlamLinearSolver;
-
-    // // allocating the optimizer
-    // auto linearSolver = g2o::make_unique<SlamLinearSolver>();
-    // linearSolver->setBlockOrdering(false);
-    // OptimizationAlgorithmGaussNewton* solver = new OptimizationAlgorithmGaussNewton(
-    // g2o::make_unique<SlamBlockSolver>(std::move(linearSolver)));
-
-    // typedef g2o::BlockSolver_6_3 BlockSolver;
-    // typedef g2o::LinearSolverCSparse<BlockSolver::PoseMatrixType> LinearSolver;
 
     std::unique_ptr<g2o::BlockSolver_6_3::LinearSolverType> linearSolver;
     linearSolver = g2o::make_unique<g2o::LinearSolverDense<g2o::BlockSolver_6_3::PoseMatrixType>>();
@@ -121,7 +113,7 @@ kfusion::KinFu::KinFu(const KinFuParams& params) : frame_counter_(0), params_(pa
     );
 
     graph_.setAlgorithm(solver);
-    graph_.setVerbose(true);
+    graph_.setVerbose(false);
 
     Eigen::Isometry3d p;
     p.setIdentity();
@@ -304,7 +296,7 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
         cv::Affine3f::Vec3 trans2 = affine.translation();
         trans1 << trans2(0), trans2(1), trans2(2);
         
-        edge_con.rotation() = rot1;   <--??
+        edge_con = rot1;
         edge_con.translation() = trans1;
 
         VertexSE3* v = new VertexSE3();
@@ -332,9 +324,29 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
         //         (edge_con.translation()(1)) << " " << 
         //         (edge_con.translation()(2)) << endl;
 
-        graph_.initializeOptimization();
-        graph_.computeInitialGuess();
-        graph_.optimize(10);
+        if (vertex_id % 100 == 1) {
+        	Eigen::Isometry3d loop_closure_edge_con; loop_closure_edge_con.setIdentity();
+            EdgeSE3* loop_closure_edge = new EdgeSE3();
+            loop_closure_edge->setId(edge_id);
+            loop_closure_edge->setMeasurement(loop_closure_edge_con);
+            loop_closure_edge->resize(2);
+            loop_closure_edge->setVertex(0, graph_.vertex(0));
+            loop_closure_edge->setVertex(1, graph_.vertex(vertex_id-1));
+            graph_.addEdge(loop_closure_edge);
+            edge_id++;
+
+            graph_.initializeOptimization();
+            graph_.computeInitialGuess();
+            graph_.optimize(10);
+
+            ofstream outFile("graph_vertices.txt", ios::out);
+            for (int i = 0 ; i < vertex_id ; i++)
+            {
+                double temp[7] = {0,};
+                graph_.vertex(i)->getEstimateData(temp);
+                outFile << temp[0] << " " << temp[1] << " " << temp[2] << endl;
+            }
+        }
 
         if (!ok)
             return reset(), false;
