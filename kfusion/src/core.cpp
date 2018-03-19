@@ -209,7 +209,7 @@ kf::SampledScopeTime::~SampledScopeTime()
     time_ms_ += getTime ();
     if (i_ % EACH == 0 && i_)
     {
-        std::cout << "Average frame time = " << time_ms_ / EACH << "ms ( " << 1000.f * EACH / time_ms_ << "fps )" << std::endl;
+        // std::cout << "Average frame time = " << time_ms_ / EACH << "ms ( " << 1000.f * EACH / time_ms_ << "fps )" << std::endl;
         time_ms_ = 0.0;
     }
     ++i_;

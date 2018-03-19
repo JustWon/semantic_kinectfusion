@@ -223,7 +223,7 @@ void kfusion::KinFu::allocate_buffers()
     depths_.create(params_.rows, params_.cols);
     normals_.create(params_.rows, params_.cols);
     points_.create(params_.rows, params_.cols);
-        colors_.create(params_.rows, params_.cols);
+    colors_.create(params_.rows, params_.cols);
     semantics_.create(params_.rows, params_.cols);
 }
 
@@ -239,6 +239,8 @@ void kfusion::KinFu::reset()
     tsdf_volume_->clear();
     if (params_.integrate_color)
         color_volume_->clear();
+    if (params_.integrate_semantic)
+    	semantic_volume_->clear();
 }
 
 kfusion::Affine3f kfusion::KinFu::getCameraPose (int time) const
@@ -265,8 +267,14 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
     for (int i = 0; i < LEVELS; ++i)
         cuda::computePointNormals(p.intr(i), curr_.depth_pyr[i], curr_.points_pyr[i], curr_.normals_pyr[i]);
 
-    cuda::waitAllDefaultStream();
+	cuda::Dists dists_copy; dists_.copyTo(dists_copy);
+	vec_dist.push_back(dists_copy);
+	cuda::Image image_copy; image.copyTo(image_copy);
+	vec_image.push_back(image_copy);
+	cuda::Image semantic_copy; semantic.copyTo(semantic_copy);
+	vec_semantic.push_back(semantic_copy);
 
+    cuda::waitAllDefaultStream();
 
     //can't perform more on first frame
     if (frame_counter_ == 0)
@@ -286,73 +294,87 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
         //ScopeTime time("icp");
         bool ok = icp_->estimateTransform(affine, p.intr, curr_.points_pyr, curr_.normals_pyr, prev_.points_pyr, prev_.normals_pyr);
 
-        Eigen::Isometry3d edge_con;
-
-        Eigen::Matrix3d rot1;
-        cv::Affine3f::Mat3 rot2 = affine.rotation();
-        rot1 << rot2(0,0),rot2(0,1),rot2(0,2),rot2(1,0),rot2(1,1),rot2(1,2),rot2(2,0),rot2(2,1),rot2(2,2);
-
-        Eigen::Vector3d trans1;
-        cv::Affine3f::Vec3 trans2 = affine.translation();
-        trans1 << trans2(0), trans2(1), trans2(2);
-        
-        edge_con = rot1;
-        edge_con.translation() = trans1;
-
-        VertexSE3* v = new VertexSE3();
-        v->setEstimate(previous_vertex_->estimate() * edge_con);
-        v->setId(vertex_id);
-        v->setMarginalized(false);
-        graph_.addVertex(v);
-        previous_vertex_ = v;
-
-        EdgeSE3* e = new EdgeSE3();
-        e->setId(edge_id);  
-        e->setMeasurement(edge_con);
-        // e->setRobustKernel(createRobustKernel());
-        // Eigen::Matrix<double, 6, 6> info_matrix;
-        // info_matrix.setIdentity();
-        // e->setInformation(info_matrix);
-        e->resize(2);
-        e->setVertex(0, graph_.vertex(vertex_id-1));
-        e->setVertex(1, graph_.vertex(vertex_id));
-        graph_.addEdge(e);
-
-        vertex_id++;edge_id++;
-
-        // cout << (edge_con.translation()(0)) << " " <<
-        //         (edge_con.translation()(1)) << " " << 
-        //         (edge_con.translation()(2)) << endl;
-
-        if (vertex_id % 100 == 1) {
-        	Eigen::Isometry3d loop_closure_edge_con; loop_closure_edge_con.setIdentity();
-            EdgeSE3* loop_closure_edge = new EdgeSE3();
-            loop_closure_edge->setId(edge_id);
-            loop_closure_edge->setMeasurement(loop_closure_edge_con);
-            loop_closure_edge->resize(2);
-            loop_closure_edge->setVertex(0, graph_.vertex(0));
-            loop_closure_edge->setVertex(1, graph_.vertex(vertex_id-1));
-            graph_.addEdge(loop_closure_edge);
-            edge_id++;
-
-            graph_.initializeOptimization();
-            graph_.computeInitialGuess();
-            graph_.optimize(10);
-
-            ofstream outFile("graph_vertices.txt", ios::out);
-            for (int i = 0 ; i < vertex_id ; i++)
-            {
-                double temp[7] = {0,};
-                graph_.vertex(i)->getEstimateData(temp);
-                outFile << temp[0] << " " << temp[1] << " " << temp[2] << endl;
-            }
-        }
-
         if (!ok)
             return reset(), false;
     }
 
     poses_.push_back(poses_.back() * affine); // curr -> global
+
+    // graph construction
+    {
+		Eigen::Isometry3d edge_con;
+
+		Eigen::Matrix3d rot1;
+		cv::Affine3f::Mat3 rot2 = affine.rotation();
+		rot1 << rot2(0,0),rot2(0,1),rot2(0,2),rot2(1,0),rot2(1,1),rot2(1,2),rot2(2,0),rot2(2,1),rot2(2,2);
+
+		Eigen::Vector3d trans1;
+		cv::Affine3f::Vec3 trans2 = affine.translation();
+		trans1 << trans2(0), trans2(1), trans2(2);
+
+		edge_con = rot1;
+		edge_con.translation() = trans1;
+
+		VertexSE3* v = new VertexSE3();
+		v->setEstimate(previous_vertex_->estimate() * edge_con);
+		v->setId(vertex_id);
+		v->setMarginalized(false);
+		graph_.addVertex(v);
+
+		EdgeSE3* e = new EdgeSE3();
+		e->setId(edge_id);
+		e->setMeasurement(edge_con);
+
+		e->resize(2);
+		e->setVertex(0, previous_vertex_);
+		e->setVertex(1, v);
+		graph_.addEdge(e);
+
+		previous_vertex_ = v;
+		vertex_id++;edge_id++;
+
+		// graph optimization
+        if (vertex_id % 100 == 1) {
+        	cout << "[Graph optimization is triggered.]" << endl;
+
+            graph_.initializeOptimization();
+            graph_.computeInitialGuess();
+            graph_.optimize(10);
+
+            // clear
+            {
+				tsdf_volume_->clear();
+				if (params_.integrate_color)
+					color_volume_->clear();
+				if (params_.integrate_semantic)
+					semantic_volume_->clear();
+            }
+
+            // redraw
+            for (int i = 0 ; i < vec_dist.size() ; i++)
+            {
+				double temp[7] = {0,};
+				graph_.vertex(i)->getEstimateData(temp);
+
+				cv::Affine3f::Vec3 trans2(temp[0],temp[1],temp[2]);
+
+				Eigen::Matrix3d rot1 = Quaternion(temp[6],temp[3],temp[4],temp[5]).toRotationMatrix();
+				cv::Affine3f::Mat3 rot2(rot1(0,0),rot1(0,1),rot1(0,2),
+										rot1(1,0),rot1(1,1),rot1(1,2),
+										rot1(2,0),rot1(2,1),rot1(2,2));
+				Affine3f pose(rot2,trans2);
+
+                tsdf_volume_->integrate(vec_dist[i], pose, p.intr);
+                if (p.integrate_color) {
+                    color_volume_->integrate(vec_image[i], vec_dist[i], pose, p.intr);
+                }
+                if (p.integrate_semantic) {
+                    semantic_volume_->integrate(vec_semantic[i], vec_dist[i], pose, p.intr);
+                }
+            }
+            return ++frame_counter_, true;
+        }
+    }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Volume integration

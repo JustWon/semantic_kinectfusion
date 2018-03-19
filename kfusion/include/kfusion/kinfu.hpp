@@ -120,5 +120,9 @@ namespace kfusion
         g2o::VertexSE3 *previous_vertex_, *current_vertex;
         int vertex_id = 0;
         int edge_id = 0;
+
+        std::vector<cuda::Dists> vec_dist;
+        std::vector<cuda::Image> vec_image;
+        std::vector<cuda::Image> vec_semantic;
     };
 }
