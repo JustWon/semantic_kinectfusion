@@ -124,7 +124,8 @@ kfusion::KinFu::KinFu(const KinFuParams& params) : frame_counter_(0), params_(pa
     v->setMarginalized(false);
     graph_.addVertex(v);
     vertex_id++;
-    previous_vertex_ = v;
+    previous_vertex = v;
+    pre_keyframe_idx = 0;
 
     allocate_buffers();
     reset();
@@ -267,7 +268,7 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
     for (int i = 0; i < LEVELS; ++i)
         cuda::computePointNormals(p.intr(i), curr_.depth_pyr[i], curr_.points_pyr[i], curr_.normals_pyr[i]);
 
-	cuda::Dists dists_copy; dists_.copyTo(dists_copy);
+    cuda::Dists dists_copy; dists_.copyTo(dists_copy);
 	vec_dist.push_back(dists_copy);
 	cuda::Image image_copy; image.copyTo(image_copy);
 	vec_image.push_back(image_copy);
@@ -301,81 +302,104 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
     poses_.push_back(poses_.back() * affine); // curr -> global
 
     // graph construction
-    {
+    int keyframe_interval = 10;
+    if (frame_counter_ % keyframe_interval == 0) {
+    	cur_keyframe_idx = frame_counter_;
+
+    	// transformation between the previous keyframe and the current keyframe
+    	cv::Affine3f keyframe_odom = cv::Affine3f::Identity();
+    	keyframe_odom = poses_[pre_keyframe_idx].inv()*poses_[cur_keyframe_idx];
+
 		Eigen::Isometry3d edge_con;
 
 		Eigen::Matrix3d rot1;
-		cv::Affine3f::Mat3 rot2 = affine.rotation();
+		cv::Affine3f::Mat3 rot2 = keyframe_odom.rotation();
 		rot1 << rot2(0,0),rot2(0,1),rot2(0,2),rot2(1,0),rot2(1,1),rot2(1,2),rot2(2,0),rot2(2,1),rot2(2,2);
 
 		Eigen::Vector3d trans1;
-		cv::Affine3f::Vec3 trans2 = affine.translation();
+		cv::Affine3f::Vec3 trans2 = keyframe_odom.translation();
 		trans1 << trans2(0), trans2(1), trans2(2);
 
 		edge_con = rot1;
 		edge_con.translation() = trans1;
 
-		VertexSE3* v = new VertexSE3();
-		v->setEstimate(previous_vertex_->estimate() * edge_con);
-		v->setId(vertex_id);
-		v->setMarginalized(false);
-		graph_.addVertex(v);
+		// current pose
+		Eigen::Isometry3d current_pose;
+
+		Eigen::Matrix3d cur_pose_rot1;
+		cv::Affine3f::Mat3 cur_pose_rot2 = poses_.back().rotation();
+		cur_pose_rot1 << cur_pose_rot2(0,0),cur_pose_rot2(0,1),cur_pose_rot2(0,2),
+						 cur_pose_rot2(1,0),cur_pose_rot2(1,1),cur_pose_rot2(1,2),
+						 cur_pose_rot2(2,0),cur_pose_rot2(2,1),cur_pose_rot2(2,2);
+
+		Eigen::Vector3d cur_pose_trans1;
+		cv::Affine3f::Vec3 cur_pose_trans2 = poses_.back().translation();
+		cur_pose_trans1 << cur_pose_trans2(0), cur_pose_trans2(1), cur_pose_trans2(2);
+
+		current_pose = cur_pose_rot1;
+		current_pose.translation() = cur_pose_trans1;
+
+		current_vertex = new VertexSE3();
+		current_vertex->setEstimate(current_pose);
+		current_vertex->setId(vertex_id);
+		current_vertex->setMarginalized(false);
+		graph_.addVertex(current_vertex);
 
 		EdgeSE3* e = new EdgeSE3();
 		e->setId(edge_id);
 		e->setMeasurement(edge_con);
-
 		e->resize(2);
-		e->setVertex(0, previous_vertex_);
-		e->setVertex(1, v);
+		e->setVertex(0, previous_vertex);
+		e->setVertex(1, current_vertex);
 		graph_.addEdge(e);
 
-		previous_vertex_ = v;
+		previous_vertex = current_vertex;
+		pre_keyframe_idx = cur_keyframe_idx;
+
 		vertex_id++;edge_id++;
-
-		// graph optimization
-        if (vertex_id % 100 == 1) {
-        	cout << "[Graph optimization is triggered.]" << endl;
-
-            graph_.initializeOptimization();
-            graph_.computeInitialGuess();
-            graph_.optimize(10);
-
-            // clear
-            {
-				tsdf_volume_->clear();
-				if (params_.integrate_color)
-					color_volume_->clear();
-				if (params_.integrate_semantic)
-					semantic_volume_->clear();
-            }
-
-            // redraw
-            for (int i = 0 ; i < vec_dist.size() ; i++)
-            {
-				double temp[7] = {0,};
-				graph_.vertex(i)->getEstimateData(temp);
-
-				cv::Affine3f::Vec3 trans2(temp[0],temp[1],temp[2]);
-
-				Eigen::Matrix3d rot1 = Quaternion(temp[6],temp[3],temp[4],temp[5]).toRotationMatrix();
-				cv::Affine3f::Mat3 rot2(rot1(0,0),rot1(0,1),rot1(0,2),
-										rot1(1,0),rot1(1,1),rot1(1,2),
-										rot1(2,0),rot1(2,1),rot1(2,2));
-				Affine3f pose(rot2,trans2);
-
-                tsdf_volume_->integrate(vec_dist[i], pose, p.intr);
-                if (p.integrate_color) {
-                    color_volume_->integrate(vec_image[i], vec_dist[i], pose, p.intr);
-                }
-                if (p.integrate_semantic) {
-                    semantic_volume_->integrate(vec_semantic[i], vec_dist[i], pose, p.intr);
-                }
-            }
-            return ++frame_counter_, true;
-        }
     }
 
+    // graph optimization
+	if (frame_counter_ % 100 == 0) {
+		cout << "[Graph optimization is triggered.]" << endl;
+
+		graph_.initializeOptimization();
+		graph_.computeInitialGuess();
+		graph_.optimize(10);
+
+		// clear
+		{
+			tsdf_volume_->clear();
+			if (params_.integrate_color)
+				color_volume_->clear();
+			if (params_.integrate_semantic)
+				semantic_volume_->clear();
+		}
+
+		// redraw
+		for (int i = 0 ; i < vertex_id ; i++)
+		{
+			double temp[7] = {0,};
+			graph_.vertex(i)->getEstimateData(temp);
+
+			cv::Affine3f::Vec3 trans2(temp[0],temp[1],temp[2]);
+
+			Eigen::Matrix3d rot1 = Quaternion(temp[6],temp[3],temp[4],temp[5]).toRotationMatrix();
+			cv::Affine3f::Mat3 rot2(rot1(0,0),rot1(0,1),rot1(0,2),
+									rot1(1,0),rot1(1,1),rot1(1,2),
+									rot1(2,0),rot1(2,1),rot1(2,2));
+			Affine3f pose(rot2,trans2);
+
+			tsdf_volume_->integrate(vec_dist[keyframe_interval*i], pose, p.intr);
+			if (p.integrate_color) {
+				color_volume_->integrate(vec_image[keyframe_interval*i], vec_dist[keyframe_interval*i], pose, p.intr);
+			}
+			if (p.integrate_semantic) {
+				semantic_volume_->integrate(vec_semantic[keyframe_interval*i], vec_dist[keyframe_interval*i], pose, p.intr);
+			}
+		}
+		return ++frame_counter_, true;
+	}
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Volume integration
 

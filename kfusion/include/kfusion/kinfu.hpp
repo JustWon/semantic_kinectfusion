@@ -117,12 +117,15 @@ namespace kfusion
 
         // g2o 
         g2o::SparseOptimizer graph_;
-        g2o::VertexSE3 *previous_vertex_, *current_vertex;
+        g2o::VertexSE3 *previous_vertex, *current_vertex;
         int vertex_id = 0;
         int edge_id = 0;
 
         std::vector<cuda::Dists> vec_dist;
         std::vector<cuda::Image> vec_image;
         std::vector<cuda::Image> vec_semantic;
+
+        int pre_keyframe_idx = 0;
+        int cur_keyframe_idx = 0;
     };
 }
