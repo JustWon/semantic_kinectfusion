@@ -48,8 +48,8 @@ namespace kfusion
             virtual void integrate(const Dists& dists, const Affine3f& camera_pose, const Intr& intr);
             virtual void raycast(const Affine3f& camera_pose, const Intr& intr, Depth& depth, Normals& normals);
             virtual void raycast(const Affine3f& camera_pose, const Intr& intr, Cloud& points, Normals& normals, 
-                Image& colors, const cuda::ColorVolume& _color_volume,
-                Image& semantics, const cuda::SemanticVolume& _semantic_volume);
+                                 Image& colors, const cuda::ColorVolume& _color_volume,
+                                 Image& semantics, const cuda::SemanticVolume& _semantic_volume);
 
             void swap(CudaData& data);
 

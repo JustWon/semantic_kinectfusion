@@ -256,7 +256,7 @@ struct KinFuApp
       triangles.download(mesh.cloud.ptr<Point>());
 
       if (save_mesh)
-    	  cv::viz::writeCloud("color_mesh.ply", mesh.cloud, mesh.colors, mesh.normals, true);
+    	  cv::viz::writeCloud("color_mesh.ply", mesh.cloud, mesh.colors, mesh.normals, true); 
 
       viz.showWidget("cloud", cv::viz::WMesh(mesh));
 
@@ -398,6 +398,9 @@ struct KinFuApp
 
 int main (int argc, char* argv[])
 {
+  if (argc < 2)
+    cout << "GPU device id is necessary." << endl;
+
   int device = atoi(argv[1]);
   cuda::setDevice (device);
   cuda::printShortCudaDeviceInfo (device);
