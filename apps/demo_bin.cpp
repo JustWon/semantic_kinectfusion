@@ -139,11 +139,15 @@ struct KinFuApp
       if(event.code == 'i' || event.code == 'I')
           kinfu.interactive_mode_ = !kinfu.interactive_mode_;
 
-      if(event.code == 'm' || event.code == 'M')
-          kinfu.take_mesh(*kinfu.kinfu_);
+      if(event.code == 'm')
+          kinfu.take_mesh(*kinfu.kinfu_, false);
+      if(event.code == 'M')
+    	  kinfu.take_mesh(*kinfu.kinfu_, true);
 
-      if(event.code == 's' || event.code == 'S')
-          kinfu.take_semantic_mesh(*kinfu.kinfu_);
+      if(event.code == 's')
+          kinfu.take_semantic_mesh(*kinfu.kinfu_, false);
+      if(event.code == 'S')
+          kinfu.take_semantic_mesh(*kinfu.kinfu_, true);
   }
 
   KinFuApp(SequenceSource& source, const KinFuParams& params) : exit_ (false), capture_(source), interactive_mode_(false), pause_(false) {
@@ -221,7 +225,7 @@ struct KinFuApp
    * @brief Run marching cubes on the volume and construct the mesh
    * @param[in] kinfu instance
    */
-  void take_mesh(KinFu& kinfu)
+  void take_mesh(KinFu& kinfu, bool save_mesh)
   {
       if (!marching_cubes_)
           marching_cubes_ = cv::Ptr<cuda::MarchingCubes>(new cuda::MarchingCubes());
@@ -251,13 +255,16 @@ struct KinFuApp
 
       triangles.download(mesh.cloud.ptr<Point>());
 
+      if (save_mesh)
+    	  cv::viz::writeCloud("color_mesh.ply", mesh.cloud, mesh.colors, mesh.normals, true);
+
       viz.showWidget("cloud", cv::viz::WMesh(mesh));
 
       // cv::imshow("mesh_colors", mesh_colors);
       // cv::waitKey(0);
   }
 
-    void take_semantic_mesh(KinFu& kinfu)
+    void take_semantic_mesh(KinFu& kinfu, bool save_mesh)
   {
       if (!marching_cubes_)
           marching_cubes_ = cv::Ptr<cuda::MarchingCubes>(new cuda::MarchingCubes());
@@ -286,6 +293,9 @@ struct KinFuApp
       }
 
       triangles.download(mesh.cloud.ptr<Point>());
+
+      if (save_mesh)
+    	  cv::viz::writeCloud("semantic_mesh.ply", mesh.cloud, mesh.colors, mesh.normals, true);
 
       viz.showWidget("cloud", cv::viz::WMesh(mesh));
 
@@ -330,18 +340,16 @@ struct KinFuApp
           if (!interactive_mode_)
               viz.setViewerPose(kinfu.getCameraPose());
 
-//          take_mesh(kinfu);
-//         take_semantic_mesh(kinfu);
-
-
           int key = cv::waitKey(pause_ ? 0 : 1);
 
           switch(key)
           {
           case 't': case 'T' : take_cloud(kinfu); break;
           case 'i': case 'I' : interactive_mode_ = !interactive_mode_; break;
-          case 'm': case 'M' : take_mesh(kinfu); break;
-          case 's': case 'S' : take_semantic_mesh(kinfu); break;
+          case 'm': take_mesh(kinfu, false); break;
+          case 'M': take_mesh(kinfu, true); break;
+          case 's': take_semantic_mesh(kinfu, false); break;
+          case 'S': take_semantic_mesh(kinfu, true); break;
           case 27: exit_ = true; break;
           case 32: pause_ = !pause_; break;
           }
@@ -394,19 +402,19 @@ int main (int argc, char* argv[])
   cuda::setDevice (device);
   cuda::printShortCudaDeviceInfo (device);
 
-//  string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_teddy/rgbd_dataset_freiburg3_teddy/";
-//  float magic_factor = 1;
-//  float volume_size = 10.0f;
-//  int img_cols = 640;
-//  int img_rows = 480;
-//  float focal_length = 525.0f;
+  string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_teddy/rgbd_dataset_freiburg3_teddy/";
+  float magic_factor = 1;
+  float volume_size = 10.0f;
+  int img_cols = 640;
+  int img_rows = 480;
+  float focal_length = 525.0f;
 
-   string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_long_office_household/";
-   float magic_factor = 1;
-   float volume_size = 20.0f;
-   int img_cols = 640;
-   int img_rows = 480;
-   float focal_length = 525.0f;
+//   string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_long_office_household/";
+//   float magic_factor = 1;
+//   float volume_size = 20.0f;
+//   int img_cols = 640;
+//   int img_rows = 480;
+//   float focal_length = 525.0f;
 
 //   string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg1_plant/rgbd_dataset_freiburg1_plant/";
 //   float magic_factor = 1;
