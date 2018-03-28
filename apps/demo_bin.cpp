@@ -20,6 +20,7 @@ class SequenceSource
     vector<string> color_files;
     vector<string> depth_files;
     vector<string> semantic_files;
+    vector<string> timestamps;
     float magic_factor;
     int seq_n;
     int idx;
@@ -58,6 +59,7 @@ public:
                 color_files.push_back(dataset_dir+tokens[1]);
                 depth_files.push_back(dataset_dir+tokens[3]);
                 semantic_files.push_back(dataset_dir+tokens[5]);
+                timestamps.push_back(tokens[0]);
             }
             openFile.close();
         }
@@ -94,7 +96,7 @@ public:
 
         // cv::imshow("color",color);
         // cv::imshow("depth",depth);
-        cv::imshow("semantic",semantic);
+//        cv::imshow("semantic",semantic);
 
         if (idx++ > seq_n)
         {
@@ -107,6 +109,11 @@ public:
     void reset()
     {
         idx = 0;
+    }
+
+    string current_timestamp()
+    {
+    	return timestamps[idx-1];
     }
 };
 
@@ -312,7 +319,7 @@ struct KinFuApp
           {
               SampledScopeTime fps(time_ms); (void)fps;
               if (kinfu.params().integrate_color)
-                  has_image = kinfu(depth_device_, color_device_, semantic_device_);
+                  has_image = kinfu(depth_device_, color_device_, semantic_device_, capture_.current_timestamp());
               else
                   has_image = kinfu(depth_device_);
           }
@@ -320,14 +327,14 @@ struct KinFuApp
           if (has_image)
               show_raycasted(kinfu);
 
-          // show_depth(depth);
-          // if (kinfu.params().integrate_color)
-          //     cv::imshow("Image", image);
-
           if (!interactive_mode_)
               viz.setViewerPose(kinfu.getCameraPose());
 
-          int key = cv::waitKey(pause_ ? 0 : 3);
+//          take_mesh(kinfu);
+//         take_semantic_mesh(kinfu);
+
+
+          int key = cv::waitKey(pause_ ? 0 : 1);
 
           switch(key)
           {
@@ -340,7 +347,7 @@ struct KinFuApp
           }
 
           //exit_ = exit_ || i > 100;
-          viz.spinOnce(3, true);
+          viz.spinOnce(1, true);
       }
       return true;
   }
@@ -383,30 +390,30 @@ struct KinFuApp
 
 int main (int argc, char* argv[])
 {
-  int device = 1;
+  int device = atoi(argv[1]);
   cuda::setDevice (device);
   cuda::printShortCudaDeviceInfo (device);
 
-//  string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_teddy/rgbd_dataset_freiburg3_teddy/";
-//  float magic_factor = 1;
-//  float volume_size = 10.0f;
-//  int img_cols = 640;
-//  int img_rows = 480;
-//  float focal_length = 525.0f;
+  string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_teddy/rgbd_dataset_freiburg3_teddy/";
+  float magic_factor = 1;
+  float volume_size = 10.0f;
+  int img_cols = 640;
+  int img_rows = 480;
+  float focal_length = 525.0f;
 
-  // string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg1_teddy/rgbd_dataset_freiburg1_teddy/";
-  // float magic_factor = 1;
-  // float volume_size = 10.0f;
-  // int img_cols = 640;
-  // int img_rows = 480;
-  // float focal_length = 525.0f;
+//   string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg1_teddy/rgbd_dataset_freiburg1_teddy/";
+//   float magic_factor = 1;
+//   float volume_size = 10.0f;
+//   int img_cols = 640;
+//   int img_rows = 480;
+//   float focal_length = 525.0f;
 
-   string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_long_office_household/";
-   float magic_factor = 1;
-   float volume_size = 20.0f;
-   int img_cols = 640;
-   int img_rows = 480;
-   float focal_length = 525.0f;
+//   string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_long_office_household/";
+//   float magic_factor = 1;
+//   float volume_size = 20.0f;
+//   int img_cols = 640;
+//   int img_rows = 480;
+//   float focal_length = 525.0f;
 
 //   string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/ICL-NUIM/living_room_traj0n_frei_png/";
 //   float magic_factor = 0.1;

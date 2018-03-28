@@ -112,8 +112,8 @@ kfusion::KinFu::KinFu(const KinFuParams& params) : frame_counter_(0), params_(pa
         g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolver))
     );
 
-    graph_.setAlgorithm(solver);
-    graph_.setVerbose(false);
+    keyframe_graph_.setAlgorithm(solver);
+    keyframe_graph_.setVerbose(false);
 
     Eigen::Isometry3d p;
     p.setIdentity();
@@ -122,9 +122,10 @@ kfusion::KinFu::KinFu(const KinFuParams& params) : frame_counter_(0), params_(pa
     v->setFixed(true);
     v->setEstimate(p);  
     v->setMarginalized(false);
-    graph_.addVertex(v);
+    keyframe_graph_.addVertex(v);
+    vec_keyframe_id.push_back(vertex_id);
     vertex_id++;
-    previous_vertex = v;
+    previous_kf_vertex = v;
     pre_keyframe_idx = 0;
 
     allocate_buffers();
@@ -251,8 +252,223 @@ kfusion::Affine3f kfusion::KinFu::getCameraPose (int time) const
     return poses_[time];
 }
 
-bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion::cuda::Image& image, const kfusion::cuda::Image& semantic)
+void kfusion::KinFu::writeKeyframePosesFromGraph(const std::string file_name)
 {
+
+    ofstream outfile(file_name);
+    outfile << "#timestamp tx ty tz qx qy qz qw" << endl;
+    for (int i = 0 ; i < vec_keyframe_id.size() ; i++)
+//    for (int i = 0 ; i < vertex_id ; i++)
+    {
+        double temp[7] = {0,};
+        keyframe_graph_.vertex(vec_keyframe_id[i])->getEstimateData(temp);
+//        keyframe_graph_.vertex(i)->getEstimateData(temp);
+        outfile << vec_timestamp[i] << " "
+        		<< temp[0] << " "
+                << temp[1] << " "
+                << temp[2] << " "
+                << temp[3] << " "
+                << temp[4] << " "
+                << temp[5] << " "
+                << temp[6] << endl;
+    }
+    outfile.close();
+}
+void kfusion::KinFu::clearVolumes()
+{
+	tsdf_volume_->clear();
+	if (params_.integrate_color)
+		color_volume_->clear();
+	if (params_.integrate_semantic)
+		semantic_volume_->clear();
+}
+
+void kfusion::KinFu::redrawVolumes(const KinFuParams& p)
+{
+	// redraw
+	for (int i = 0 ; i < vec_keyframe_id.size() ; i++)
+	{
+		double temp[7] = {0,};
+		keyframe_graph_.vertex(vec_keyframe_id[i])->getEstimateData(temp);
+
+		cv::Affine3f::Vec3 trans2(temp[0],temp[1],temp[2]);
+
+		Eigen::Matrix3d rot1 = Quaternion(temp[6],temp[3],temp[4],temp[5]).toRotationMatrix();
+		cv::Affine3f::Mat3 rot2(rot1(0,0),rot1(0,1),rot1(0,2),
+								rot1(1,0),rot1(1,1),rot1(1,2),
+								rot1(2,0),rot1(2,1),rot1(2,2));
+		Affine3f pose(rot2,trans2);
+
+		tsdf_volume_->integrate(vec_dist[i], pose, p.intr);
+		if (p.integrate_color) {
+			color_volume_->integrate(vec_image[i], vec_dist[i], pose, p.intr);
+		}
+		if (p.integrate_semantic) {
+			semantic_volume_->integrate(vec_semantic[i], vec_dist[i], pose, p.intr);
+		}
+	}
+}
+
+void kfusion::KinFu::Affine3fToIsometry3d(const cv::Affine3f &from, Eigen::Isometry3d &to)
+{
+	Eigen::Matrix3d rot1;
+	cv::Affine3f::Mat3 rot2 = from.rotation();
+	rot1 << rot2(0,0),rot2(0,1),rot2(0,2),rot2(1,0),rot2(1,1),rot2(1,2),rot2(2,0),rot2(2,1),rot2(2,2);
+
+	Eigen::Vector3d trans1;
+	cv::Affine3f::Vec3 trans2 = from.translation();
+	trans1 << trans2(0), trans2(1), trans2(2);
+
+	to = rot1;
+	to.translation() = trans1;
+}
+
+g2o::VertexSE3* kfusion::KinFu::addVertex(int vertex_id, Eigen::Isometry3d& current_pose)
+{
+//	cout << frame_counter_ << " " << vertex_id << endl;
+	g2o::VertexSE3 *current_vertex = new VertexSE3();
+	current_vertex->setEstimate(current_pose);
+	current_vertex->setId(vertex_id);
+	current_vertex->setMarginalized(false);
+	keyframe_graph_.addVertex(current_vertex);
+
+	return current_vertex;
+}
+
+void kfusion::KinFu::addEdge(int edge_id, g2o::VertexSE3* first_vertex, g2o::VertexSE3* second_vertex, Eigen::Isometry3d& constraint)
+{
+	EdgeSE3* e = new EdgeSE3();
+	e->setId(edge_id);
+	e->setMeasurement(constraint);
+	e->resize(2);
+	e->setVertex(0, first_vertex);
+	e->setVertex(1, second_vertex);
+	keyframe_graph_.addEdge(e);
+}
+void kfusion::KinFu::addEdge(int edge_id, g2o::OptimizableGraph::Vertex* first_vertex, g2o::VertexSE3* second_vertex, Eigen::Isometry3d& constraint)
+{
+	EdgeSE3* e = new EdgeSE3();
+	e->setId(edge_id);
+	e->setMeasurement(constraint);
+	e->resize(2);
+	e->setVertex(0, first_vertex);
+	e->setVertex(1, second_vertex);
+	keyframe_graph_.addEdge(e);
+}
+void kfusion::KinFu::addEdge(int edge_id, g2o::VertexSE3* first_vertex, g2o::OptimizableGraph::Vertex* second_vertex, Eigen::Isometry3d& constraint)
+{
+	EdgeSE3* e = new EdgeSE3();
+	e->setId(edge_id);
+	e->setMeasurement(constraint);
+	e->resize(2);
+	e->setVertex(0, first_vertex);
+	e->setVertex(1, second_vertex);
+	keyframe_graph_.addEdge(e);
+}
+
+bool kfusion::KinFu::estimateTransform(const cuda::Depth& source_depth, const cuda::Depth& target_depth, cv::Affine3f& transform, const int LEVELS, const KinFuParams& p)
+{
+	//source_frame
+	 cuda::Frame source_frame;
+	 {
+		 source_frame.depth_pyr.resize(LEVELS);
+		 source_frame.normals_pyr.resize(LEVELS);
+		 source_frame.points_pyr.resize(LEVELS);
+
+		 int cols = params_.cols;
+		 int rows = params_.rows;
+		 for(int i = 0; i < LEVELS; ++i)
+		 {
+			 source_frame.depth_pyr[i].create(rows, cols);
+			 source_frame.normals_pyr[i].create(rows, cols);
+			 source_frame.points_pyr[i].create(rows, cols);
+
+			 cols /= 2;
+			 rows /= 2;
+		 }
+
+		 cuda::depthBilateralFilter(source_depth, source_frame.depth_pyr[0], p.bilateral_kernel_size, p.bilateral_sigma_spatial, p.bilateral_sigma_depth);
+
+		 if (p.icp_truncate_depth_dist > 0)
+			 kfusion::cuda::depthTruncation(source_frame.depth_pyr[0], p.icp_truncate_depth_dist);
+
+		 for (int i = 1; i < LEVELS; ++i)
+			 cuda::depthBuildPyramid(source_frame.depth_pyr[i-1], source_frame.depth_pyr[i], p.bilateral_sigma_depth);
+
+		 for (int i = 0; i < LEVELS; ++i)
+			 cuda::computePointNormals(p.intr(i), source_frame.depth_pyr[i], source_frame.points_pyr[i], source_frame.normals_pyr[i]);
+	 }
+	 //target_frame
+	 cuda::Frame target_frame;
+	 {
+		 target_frame.depth_pyr.resize(LEVELS);
+		 target_frame.normals_pyr.resize(LEVELS);
+		 target_frame.points_pyr.resize(LEVELS);
+
+		 int cols = params_.cols;
+		 int rows = params_.rows;
+		 for(int i = 0; i < LEVELS; ++i)
+		 {
+			 target_frame.depth_pyr[i].create(rows, cols);
+			 target_frame.normals_pyr[i].create(rows, cols);
+			 target_frame.points_pyr[i].create(rows, cols);
+
+			 cols /= 2;
+			 rows /= 2;
+		 }
+
+		 cuda::depthBilateralFilter(target_depth, target_frame.depth_pyr[0], p.bilateral_kernel_size, p.bilateral_sigma_spatial, p.bilateral_sigma_depth);
+
+		 if (p.icp_truncate_depth_dist > 0)
+			 kfusion::cuda::depthTruncation(target_frame.depth_pyr[0], p.icp_truncate_depth_dist);
+
+		 for (int i = 1; i < LEVELS; ++i)
+			 cuda::depthBuildPyramid(target_frame.depth_pyr[i-1], target_frame.depth_pyr[i], p.bilateral_sigma_depth);
+
+		 for (int i = 0; i < LEVELS; ++i)
+			 cuda::computePointNormals(p.intr(i), target_frame.depth_pyr[i], target_frame.points_pyr[i], target_frame.normals_pyr[i]);
+	 }
+
+
+	 cv::Ptr<cuda::ProjectiveICP> icp_constraint;
+	 icp_constraint = cv::Ptr<cuda::ProjectiveICP>(new cuda::ProjectiveICP());
+	 icp_constraint->setDistThreshold(params_.icp_dist_thres);
+	 icp_constraint->setAngleThreshold(params_.icp_angle_thres);
+	 icp_constraint->setIterationsNum(params_.icp_iter_num);
+	 bool ok = icp_constraint->estimateTransform(transform, p.intr, source_frame.points_pyr, source_frame.normals_pyr,
+			 	 	 	 	 	 	 	 	 target_frame.points_pyr, target_frame.normals_pyr);
+
+	 return ok;
+}
+
+void ConsolePrint(std::string color, std::string text)
+{
+	// https://stackoverflow.com/questions/2616906/how-do-i-output-coloured-text-to-a-linux-terminal
+	if (color == "red")
+		cout << "\033[1;31m" << text  << "\033[0m";
+	else if (color == "green")
+		cout << "\033[1;32m" << text  << "\033[0m";
+	else if (color == "yellow")
+		cout << "\033[1;33m" << text  << "\033[0m";
+	else if (color == "blue")
+			cout << "\033[1;34m" << text  << "\033[0m";
+	else if (color == "magenta")
+			cout << "\033[1;35m" << text  << "\033[0m";
+	else if (color == "cyan")
+			cout << "\033[1;36m" << text  << "\033[0m";
+	else if (color == "white")
+			cout << "\033[1;37m" << text  << "\033[0m";
+}
+
+bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion::cuda::Image& image, const kfusion::cuda::Image& semantic, const std::string timestamp)
+{
+	bool keyframe_created = false;
+	bool kfc_flag = true;
+	int keyframe_interval = 5;
+	int kfc_window = keyframe_interval/2+1;
+	bool loop_closure_detected = false;
+	int optim_point = 1000;
+
     const KinFuParams& p = params_;
     const int LEVELS = icp_->getUsedLevelsNum();
 
@@ -268,12 +484,25 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
     for (int i = 0; i < LEVELS; ++i)
         cuda::computePointNormals(p.intr(i), curr_.depth_pyr[i], curr_.points_pyr[i], curr_.normals_pyr[i]);
 
-    cuda::Dists dists_copy; dists_.copyTo(dists_copy);
-	vec_dist.push_back(dists_copy);
-	cuda::Image image_copy; image.copyTo(image_copy);
-	vec_image.push_back(image_copy);
-	cuda::Image semantic_copy; semantic.copyTo(semantic_copy);
-	vec_semantic.push_back(semantic_copy);
+    if (frame_counter_ % keyframe_interval == 0)
+    {
+        cuda::Depth depth_copy; depth.copyTo(depth_copy);
+        vec_depth.push_back(depth_copy);
+        cuda::Dists dists_copy; dists_.copyTo(dists_copy);
+    	vec_dist.push_back(dists_copy);
+    	cuda::Image image_copy; image.copyTo(image_copy);
+    	vec_image.push_back(image_copy);
+    	cuda::Image semantic_copy; semantic.copyTo(semantic_copy);
+    	vec_semantic.push_back(semantic_copy);
+    	vec_timestamp.push_back(timestamp);
+    }
+
+    // sliding window
+    if (sliding_vec_depth.size() >= kfc_window){
+    	sliding_vec_depth.erase(sliding_vec_depth.begin());
+    }
+    cuda::Depth depth_copy; depth.copyTo(depth_copy);
+    sliding_vec_depth.push_back(depth_copy);
 
     cuda::waitAllDefaultStream();
 
@@ -290,7 +519,7 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
 
     ///////////////////////////////////////////////////////////////////////////////////////////
     // ICP
-    Affine3f affine; // cuur -> prev
+    Affine3f affine;
     {
         //ScopeTime time("icp");
         bool ok = icp_->estimateTransform(affine, p.intr, curr_.points_pyr, curr_.normals_pyr, prev_.points_pyr, prev_.normals_pyr);
@@ -298,108 +527,171 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
         if (!ok)
             return reset(), false;
     }
+    poses_.push_back(poses_.back() * affine);
 
-    poses_.push_back(poses_.back() * affine); // curr -> global
-
-    // graph construction
-    int keyframe_interval = 10;
+    // keyframe graph construction
     if (frame_counter_ % keyframe_interval == 0) {
     	cur_keyframe_idx = frame_counter_;
+
+    	ConsolePrint("green", "[keyframe created] ");
+    	cout << "keyframe idx: " << cur_keyframe_idx << endl;
 
     	// transformation between the previous keyframe and the current keyframe
     	cv::Affine3f keyframe_odom = cv::Affine3f::Identity();
     	keyframe_odom = poses_[pre_keyframe_idx].inv()*poses_[cur_keyframe_idx];
 
 		Eigen::Isometry3d edge_con;
-
-		Eigen::Matrix3d rot1;
-		cv::Affine3f::Mat3 rot2 = keyframe_odom.rotation();
-		rot1 << rot2(0,0),rot2(0,1),rot2(0,2),rot2(1,0),rot2(1,1),rot2(1,2),rot2(2,0),rot2(2,1),rot2(2,2);
-
-		Eigen::Vector3d trans1;
-		cv::Affine3f::Vec3 trans2 = keyframe_odom.translation();
-		trans1 << trans2(0), trans2(1), trans2(2);
-
-		edge_con = rot1;
-		edge_con.translation() = trans1;
+		Affine3fToIsometry3d(keyframe_odom, edge_con);
 
 		// current pose
 		Eigen::Isometry3d current_pose;
+		Affine3fToIsometry3d(poses_.back(),current_pose);
 
-		Eigen::Matrix3d cur_pose_rot1;
-		cv::Affine3f::Mat3 cur_pose_rot2 = poses_.back().rotation();
-		cur_pose_rot1 << cur_pose_rot2(0,0),cur_pose_rot2(0,1),cur_pose_rot2(0,2),
-						 cur_pose_rot2(1,0),cur_pose_rot2(1,1),cur_pose_rot2(1,2),
-						 cur_pose_rot2(2,0),cur_pose_rot2(2,1),cur_pose_rot2(2,2);
+//		cout << poses_.back().translation() << endl;
 
-		Eigen::Vector3d cur_pose_trans1;
-		cv::Affine3f::Vec3 cur_pose_trans2 = poses_.back().translation();
-		cur_pose_trans1 << cur_pose_trans2(0), cur_pose_trans2(1), cur_pose_trans2(2);
+		current_kf_vertex = addVertex(vertex_id, current_pose);
+		addEdge(edge_id, previous_kf_vertex, current_kf_vertex, edge_con);
 
-		current_pose = cur_pose_rot1;
-		current_pose.translation() = cur_pose_trans1;
+		vec_keyframe_id.push_back(vertex_id);
+		vertex_id++;edge_id++;
 
-		current_vertex = new VertexSE3();
-		current_vertex->setEstimate(current_pose);
-		current_vertex->setId(vertex_id);
-		current_vertex->setMarginalized(false);
-		graph_.addVertex(current_vertex);
+		// backward_kfc
+		if (kfc_flag)
+		{
+			for (int i = 0 ; i < kfc_window ; i++)
+			{
+				int target_keyframe_idx = vec_keyframe_id.back();
+				int current_vertex_idx = vec_keyframe_id.back()-kfc_window+i;
 
-		EdgeSE3* e = new EdgeSE3();
-		e->setId(edge_id);
-		e->setMeasurement(edge_con);
-		e->resize(2);
-		e->setVertex(0, previous_vertex);
-		e->setVertex(1, current_vertex);
-		graph_.addEdge(e);
+				ConsolePrint("red", "[backward KFC] ");
+				cout << "target keyframe idx: " << target_keyframe_idx << " "
+						"current vertex idx " << current_vertex_idx << endl;
 
-		previous_vertex = current_vertex;
+				// KFC from ICP
+				Affine3f backward_kfc_transform;
+				cuda::Depth general_frame_depth = sliding_vec_depth[i];
+				cuda::Depth current_keyframe_depth = vec_depth.back();
+				estimateTransform(general_frame_depth, current_keyframe_depth, backward_kfc_transform, LEVELS, p);// original
+				cout << "KFC from ICP " << backward_kfc_transform.translation() << endl;
+
+				// KFC from pose vector
+//				backward_kfc_transform = poses_[current_vertex_idx].inv()*poses_[target_keyframe_idx];
+//				cout << "KFC from pose vector " << backward_kfc_transform.translation() << endl;
+
+				Eigen::Isometry3d backward_kfc_edge;
+				Affine3fToIsometry3d(backward_kfc_transform, backward_kfc_edge);
+
+				// current vertex position
+				Eigen::Isometry3d current_pose;
+				Affine3fToIsometry3d(poses_[current_vertex_idx],current_pose);
+
+				//cout << poses_[current_vertex_idx].translation() << endl;
+
+				g2o::OptimizableGraph::Vertex* current_vertex = keyframe_graph_.vertex(current_vertex_idx);
+				addEdge(edge_id, current_vertex, previous_kf_vertex, backward_kfc_edge);
+
+				edge_id++;
+			}
+		}
+
+		previous_kf_vertex = current_kf_vertex;
 		pre_keyframe_idx = cur_keyframe_idx;
 
-		vertex_id++;edge_id++;
+//		keyframe_created = true;
+    }
+    // forward_kfc, with edge
+    else if (frame_counter_ - pre_keyframe_idx <= kfc_window && kfc_flag){
+    	int target_keyframe_idx = pre_keyframe_idx;
+    	int current_vertex_idx = vertex_id;
+
+    	ConsolePrint("yellow", "[forward KFC] ");
+    	cout << "target keyframe idx: " << target_keyframe_idx << " "
+    			"current vertex idx " << current_vertex_idx << endl;
+
+    	// KFC from ICP
+    	Affine3f forward_kfc_transform;
+		cuda::Depth general_frame_depth = depth;
+		cuda::Depth previous_keyframe_depth = vec_depth.back();
+    	estimateTransform(general_frame_depth, previous_keyframe_depth, forward_kfc_transform, LEVELS, p);
+    	cout << "KFC from ICP " << forward_kfc_transform.translation() << endl;
+
+    	// KFC from pose vector
+//    	forward_kfc_transform = poses_[current_vertex_idx].inv()*poses_[target_keyframe_idx];
+//    	cout << "KFC from pose vector " << forward_kfc_transform.translation() << endl;
+
+		Eigen::Isometry3d forward_kfc_edge;
+		Affine3fToIsometry3d(forward_kfc_transform,forward_kfc_edge);
+
+		// current vertex position
+		Eigen::Isometry3d current_pose;
+		Affine3fToIsometry3d(poses_.back(),current_pose);
+
+		// cout << poses_.back().translation() << endl;
+
+		g2o::VertexSE3 *current_vertex = addVertex(current_vertex_idx, current_pose);
+		addEdge(edge_id, previous_kf_vertex, current_vertex, forward_kfc_edge);
+
+		vertex_id++; edge_id++;
+    }
+    // forward kfc, vertex only
+    else
+    {
+		// current vertex position
+		Eigen::Isometry3d current_pose;
+		Affine3fToIsometry3d(poses_.back(),current_pose);
+
+		g2o::VertexSE3 *current_vertex = addVertex(vertex_id, current_pose);
+
+		vertex_id++;
     }
 
+    // loop closure detection
+//    int loop_closure_idx1 = 0;  // be careful!
+//    int loop_closure_idx2 = 100;
+//    if (frame_counter_ == loop_closure_idx2) {
+//		 cout << "[Loop closure is detected.]" << endl;
+//
+//		 Affine3f lcc_transform;
+//		 estimateTransform(depth,vec_depth[loop_closure_idx1/keyframe_interval],lcc_transform, LEVELS, p);
+//
+//		 // cout << loop_closure_transform.translation() << endl;
+//
+//		 Eigen::Isometry3d lc_con;
+//		 Affine3fToIsometry3d(lcc_transform,lc_con);
+//		 addEdge(edge_id, keyframe_graph_.vertex(loop_closure_idx1/keyframe_interval), current_kf_vertex, lc_con);
+//
+//		 edge_id++;
+//         loop_closure_detected = true;
+//    }
+
     // graph optimization
-	if (frame_counter_ % 100 == 0) {
-		cout << "[Graph optimization is triggered.]" << endl;
+	if (loop_closure_detected || keyframe_created || frame_counter_ == optim_point) {
+		cout << endl << "[Graph optimization is triggered.]" << endl;
 
-		graph_.initializeOptimization();
-		graph_.computeInitialGuess();
-		graph_.optimize(10);
+//		// incremental PGO
+//		for (int i = 0 ; i < cur_keyframe_idx-keyframe_interval ; i++)
+//		{
+//			keyframe_graph_.vertex(i)->setFixed(true);
+//		}
 
-		// clear
-		{
-			tsdf_volume_->clear();
-			if (params_.integrate_color)
-				color_volume_->clear();
-			if (params_.integrate_semantic)
-				semantic_volume_->clear();
-		}
+		keyframe_graph_.setVerbose(true);
+		keyframe_graph_.initializeOptimization();
+		keyframe_graph_.computeInitialGuess();
+		keyframe_graph_.optimize(5);
 
-		// redraw
-		for (int i = 0 ; i < vertex_id ; i++)
-		{
-			double temp[7] = {0,};
-			graph_.vertex(i)->getEstimateData(temp);
+		clearVolumes();
+		redrawVolumes(p);
 
-			cv::Affine3f::Vec3 trans2(temp[0],temp[1],temp[2]);
+		if (kfc_flag)
+			writeKeyframePosesFromGraph("poses_with_KFC.txt");
+		else
+			writeKeyframePosesFromGraph("poses_without_KFC.txt");
 
-			Eigen::Matrix3d rot1 = Quaternion(temp[6],temp[3],temp[4],temp[5]).toRotationMatrix();
-			cv::Affine3f::Mat3 rot2(rot1(0,0),rot1(0,1),rot1(0,2),
-									rot1(1,0),rot1(1,1),rot1(1,2),
-									rot1(2,0),rot1(2,1),rot1(2,2));
-			Affine3f pose(rot2,trans2);
-
-			tsdf_volume_->integrate(vec_dist[keyframe_interval*i], pose, p.intr);
-			if (p.integrate_color) {
-				color_volume_->integrate(vec_image[keyframe_interval*i], vec_dist[keyframe_interval*i], pose, p.intr);
-			}
-			if (p.integrate_semantic) {
-				semantic_volume_->integrate(vec_semantic[keyframe_interval*i], vec_dist[keyframe_interval*i], pose, p.intr);
-			}
-		}
+        loop_closure_detected = false;
+        keyframe_created = false;
 		return ++frame_counter_, true;
 	}
+
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Volume integration
 

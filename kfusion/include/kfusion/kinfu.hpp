@@ -87,12 +87,24 @@ namespace kfusion
 
         void reset();
 
-        bool operator()(const cuda::Depth& depth, const cuda::Image& image = cuda::Image(), const cuda::Image& semantic = cuda::Image());
+        bool operator()(const cuda::Depth& depth, const cuda::Image& image = cuda::Image(), const cuda::Image& semantic = cuda::Image(),
+        				const std::string timestamp = "000000.0000");
 
         void renderImage(cuda::Image& image, int flags = 0);
         void renderImage(cuda::Image& image, const Affine3f& pose, int flags = 0);
 
         Affine3f getCameraPose (int time = -1) const;
+
+        void writeKeyframePosesFromGraph(const std::string file_name);
+        void clearVolumes();
+        void redrawVolumes(const KinFuParams& p);
+        void Affine3fToIsometry3d(const cv::Affine3f &from, Eigen::Isometry3d &to);
+        g2o::VertexSE3* addVertex(int vertex_id, Eigen::Isometry3d& current_pose);
+        void addEdge(int edge_id, g2o::VertexSE3* first_vertex, g2o::VertexSE3* second_vertex, Eigen::Isometry3d& constraint);
+        void addEdge(int edge_id, g2o::OptimizableGraph::Vertex* first_vertex, g2o::VertexSE3* second_vertex, Eigen::Isometry3d& constraint);
+        void addEdge(int edge_id, g2o::VertexSE3* first_vertex, g2o::OptimizableGraph::Vertex* second_vertex, Eigen::Isometry3d& constraint);
+        bool estimateTransform(const cuda::Depth& source_depth, const cuda::Depth& target_depth, cv::Affine3f& transform, const int LEVELS, const KinFuParams& p);
+
     private:
         void allocate_buffers();
 
@@ -116,14 +128,20 @@ namespace kfusion
         cv::Ptr<cuda::ProjectiveICP> icp_;
 
         // g2o 
-        g2o::SparseOptimizer graph_;
-        g2o::VertexSE3 *previous_vertex, *current_vertex;
+        g2o::SparseOptimizer keyframe_graph_;
+        g2o::VertexSE3 *previous_kf_vertex, *current_kf_vertex;
         int vertex_id = 0;
         int edge_id = 0;
 
+        std::vector<cuda::Depth> vec_depth;
         std::vector<cuda::Dists> vec_dist;
         std::vector<cuda::Image> vec_image;
         std::vector<cuda::Image> vec_semantic;
+        std::vector<std::string> vec_timestamp;
+
+        std::vector<cuda::Depth> sliding_vec_depth;
+        std::vector<int> vec_keyframe_id;
+
 
         int pre_keyframe_idx = 0;
         int cur_keyframe_idx = 0;

@@ -124,6 +124,67 @@ namespace kfusion
             __kf_device__
             void operator()(SemanticVolume& volume) const
             {
+                // color integration
+                // int x = blockIdx.x * blockDim.x + threadIdx.x;
+                // int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+                // if (x >= volume.dims.x || y >= volume.dims.y)
+                //     return;
+
+                // float3 zstep = make_float3(vol2cam.R.data[0].z, vol2cam.R.data[1].z, vol2cam.R.data[2].z) * volume.voxel_size.z;
+
+                // float3 vx = make_float3(x * volume.voxel_size.x, y * volume.voxel_size.y, 0);
+                // float3 vc = vol2cam * vx; //tranform from volume coo frame to camera one
+
+                // ColorVolume::elem_type* vptr = volume.beg(x, y);
+                // for(int i = 0; i < volume.dims.z; ++i, vc += zstep, vptr = volume.zstep(vptr))
+                // {
+                //     float2 coo = proj(vc); // project to image coordinate
+                //     // check wether coo in inside the image boundaries
+                //     if (coo.x >= 0.0 && coo.y >= 0.0 &&
+                //         coo.x < im_size.x && coo.y < im_size.y) {
+
+                //         float Dp = tex2D(depth_tex, coo.x, coo.y);
+                //         if(Dp == 0 || vc.z <= 0)
+                //             continue;
+
+                //         bool update = false;
+                //         // Check the distance
+                //         float sdf = Dp - sqrt(dot(vc, vc)); //Dp - norm(v)
+                //         update = (sdf > -volume.trunc_dist) && (sdf < volume.trunc_dist);
+                //         if (update)
+                //         {
+                //             // Read the existing value and weight
+                //             uchar4 volume_rgbw = *vptr;
+                //             int weight_prev = volume_rgbw.w;
+
+                //             // Average with new value and weight
+                //             uchar4 rgb = tex2D(image_tex, coo.x, coo.y);
+                //             const float Wrk = 1.f;
+
+                //             float new_x =  __fdividef(__fmaf_rn(volume_rgbw.x, weight_prev, rgb.x), weight_prev + Wrk);
+                //             //uchar new_x = (volume_rgbw.x * weight_prev + Wrk * rgb.x) / (weight_prev + Wrk);
+                //             float new_y =  __fdividef(__fmaf_rn(volume_rgbw.y, weight_prev, rgb.y), weight_prev + Wrk);
+                //             //uchar new_y = (volume_rgbw.y * weight_prev + Wrk * rgb.y) / (weight_prev + Wrk);
+                //             float new_z =  __fdividef(__fmaf_rn(volume_rgbw.z, weight_prev, rgb.z), weight_prev + Wrk);
+                //             //uchar new_z = (volume_rgbw.z * weight_prev + Wrk * rgb.z) / (weight_prev + Wrk);
+
+                //             int weight_new = min(weight_prev + 1, 255);
+
+                //             uchar4 volume_rgbw_new;
+                //             volume_rgbw_new.x = (uchar)__float2int_rn(new_x);
+                //             volume_rgbw_new.y = (uchar)__float2int_rn(new_y);
+                //             volume_rgbw_new.z = (uchar)__float2int_rn(new_z);
+                //             volume_rgbw_new.w = min(volume.max_weight, weight_new);
+
+                //             // Write back
+                //             *vptr = volume_rgbw_new;
+                //         }
+                //     } // in camera image range
+                // } // for (int i=0; i<volume.dims.z; ++i, vc += zstep, vptr = volume.zstep(vptr))
+
+
+                //semantic integration
                 int x = blockIdx.x * blockDim.x + threadIdx.x;
                 int y = blockIdx.y * blockDim.y + threadIdx.y;
 
