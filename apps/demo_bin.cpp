@@ -394,23 +394,30 @@ int main (int argc, char* argv[])
   cuda::setDevice (device);
   cuda::printShortCudaDeviceInfo (device);
 
-  string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_teddy/rgbd_dataset_freiburg3_teddy/";
-  float magic_factor = 1;
-  float volume_size = 10.0f;
-  int img_cols = 640;
-  int img_rows = 480;
-  float focal_length = 525.0f;
+//  string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_teddy/rgbd_dataset_freiburg3_teddy/";
+//  float magic_factor = 1;
+//  float volume_size = 10.0f;
+//  int img_cols = 640;
+//  int img_rows = 480;
+//  float focal_length = 525.0f;
 
-//   string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg1_teddy/rgbd_dataset_freiburg1_teddy/";
+   string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_long_office_household/";
+   float magic_factor = 1;
+   float volume_size = 20.0f;
+   int img_cols = 640;
+   int img_rows = 480;
+   float focal_length = 525.0f;
+
+//   string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg1_plant/rgbd_dataset_freiburg1_plant/";
 //   float magic_factor = 1;
 //   float volume_size = 10.0f;
 //   int img_cols = 640;
 //   int img_rows = 480;
 //   float focal_length = 525.0f;
 
-//   string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_long_office_household/";
+//   string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg1_teddy/rgbd_dataset_freiburg1_teddy/";
 //   float magic_factor = 1;
-//   float volume_size = 20.0f;
+//   float volume_size = 10.0f;
 //   int img_cols = 640;
 //   int img_rows = 480;
 //   float focal_length = 525.0f;

@@ -436,7 +436,7 @@ bool kfusion::KinFu::estimateTransform(const cuda::Depth& source_depth, const cu
 	 icp_constraint->setAngleThreshold(params_.icp_angle_thres);
 	 icp_constraint->setIterationsNum(params_.icp_iter_num);
 	 bool ok = icp_constraint->estimateTransform(transform, p.intr, source_frame.points_pyr, source_frame.normals_pyr,
-			 	 	 	 	 	 	 	 	 target_frame.points_pyr, target_frame.normals_pyr);
+			 	 	 	 	 	 	 	 	 	 	 	 	 	    target_frame.points_pyr, target_frame.normals_pyr);
 
 	 return ok;
 }
@@ -463,9 +463,9 @@ void ConsolePrint(std::string color, std::string text)
 bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion::cuda::Image& image, const kfusion::cuda::Image& semantic, const std::string timestamp)
 {
 	bool keyframe_created = false;
-	bool kfc_flag = true;
+	bool kfc_flag = false;
 	int keyframe_interval = 5;
-	int kfc_window = keyframe_interval/2+1;
+	int kfc_window = keyframe_interval/2+2;
 	bool loop_closure_detected = false;
 	int optim_point = 1000;
 
@@ -498,7 +498,7 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
     }
 
     // sliding window
-    if (sliding_vec_depth.size() >= kfc_window){
+    if (sliding_vec_depth.size() > kfc_window){
     	sliding_vec_depth.erase(sliding_vec_depth.begin());
     }
     cuda::Depth depth_copy; depth.copyTo(depth_copy);
@@ -569,9 +569,9 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
 
 				// KFC from ICP
 				Affine3f backward_kfc_transform;
-				cuda::Depth general_frame_depth = sliding_vec_depth[i];
-				cuda::Depth current_keyframe_depth = vec_depth.back();
-				estimateTransform(general_frame_depth, current_keyframe_depth, backward_kfc_transform, LEVELS, p);// original
+				cuda::Depth current_depth = sliding_vec_depth[i];
+				cuda::Depth previous_keyframe_depth = vec_depth.back();
+				estimateTransform(previous_keyframe_depth, current_depth, backward_kfc_transform, LEVELS, p);// original
 				cout << "KFC from ICP " << backward_kfc_transform.translation() << endl;
 
 				// KFC from pose vector
@@ -610,9 +610,9 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
 
     	// KFC from ICP
     	Affine3f forward_kfc_transform;
-		cuda::Depth general_frame_depth = depth;
+		cuda::Depth current_depth = depth;
 		cuda::Depth previous_keyframe_depth = vec_depth.back();
-    	estimateTransform(general_frame_depth, previous_keyframe_depth, forward_kfc_transform, LEVELS, p);
+    	estimateTransform(previous_keyframe_depth, current_depth, forward_kfc_transform, LEVELS, p);
     	cout << "KFC from ICP " << forward_kfc_transform.translation() << endl;
 
     	// KFC from pose vector
@@ -629,7 +629,7 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
 		// cout << poses_.back().translation() << endl;
 
 		g2o::VertexSE3 *current_vertex = addVertex(current_vertex_idx, current_pose);
-		addEdge(edge_id, previous_kf_vertex, current_vertex, forward_kfc_edge);
+		addEdge(edge_id, current_vertex, previous_kf_vertex, forward_kfc_edge);
 
 		vertex_id++; edge_id++;
     }
@@ -668,8 +668,8 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
 	if (loop_closure_detected || keyframe_created || frame_counter_ == optim_point) {
 		cout << endl << "[Graph optimization is triggered.]" << endl;
 
-//		// incremental PGO
-//		for (int i = 0 ; i < cur_keyframe_idx-keyframe_interval ; i++)
+		// incremental PGO
+//		for (int i = 0 ; i < cur_keyframe_idx-2*keyframe_interval ; i++)
 //		{
 //			keyframe_graph_.vertex(i)->setFixed(true);
 //		}
@@ -677,7 +677,7 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
 		keyframe_graph_.setVerbose(true);
 		keyframe_graph_.initializeOptimization();
 		keyframe_graph_.computeInitialGuess();
-		keyframe_graph_.optimize(5);
+		keyframe_graph_.optimize(2);
 
 		clearVolumes();
 		redrawVolumes(p);
@@ -687,6 +687,7 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
 		else
 			writeKeyframePosesFromGraph("poses_without_KFC.txt");
 
+		exit(0);
         loop_closure_detected = false;
         keyframe_created = false;
 		return ++frame_counter_, true;
