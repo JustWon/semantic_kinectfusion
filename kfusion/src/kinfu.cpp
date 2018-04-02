@@ -467,7 +467,6 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
 	int keyframe_interval = 5;
 	int kfc_window = keyframe_interval/2+2;
 	bool loop_closure_detected = false;
-	int optim_point = 1000;
 
     const KinFuParams& p = params_;
     const int LEVELS = icp_->getUsedLevelsNum();
@@ -524,8 +523,10 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
         //ScopeTime time("icp");
         bool ok = icp_->estimateTransform(affine, p.intr, curr_.points_pyr, curr_.normals_pyr, prev_.points_pyr, prev_.normals_pyr);
 
-        if (!ok)
+        if (!ok) // failure case
+        {
             return reset(), false;
+        }
     }
     poses_.push_back(poses_.back() * affine);
 
@@ -665,7 +666,7 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
 //    }
 
     // graph optimization
-	if (loop_closure_detected || keyframe_created || frame_counter_ == optim_point) {
+	if (loop_closure_detected || keyframe_created) {
 		cout << endl << "[Graph optimization is triggered.]" << endl;
 
 		// incremental PGO
@@ -687,7 +688,6 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
 		else
 			writeKeyframePosesFromGraph("poses_without_KFC.txt");
 
-		exit(0);
         loop_closure_detected = false;
         keyframe_created = false;
 		return ++frame_counter_, true;

@@ -9,9 +9,53 @@
 #include <io/bin_grabber.hpp>
 #include <string>
 
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/ini_parser.hpp>
+
 using namespace kfusion;
 using namespace std;
 
+
+class ConfigParser
+{
+	boost::property_tree::ptree pt;
+
+public:
+	string dataset_dir;
+	double magic_factor;
+	int seq_n;
+	int idx;
+	int gpu_id;
+	int start_frame;
+	double volume_size;
+	int img_cols;
+	int img_rows;
+	double focal_length;
+
+	ConfigParser(string config_file)
+	{
+    	boost::property_tree::ini_parser::read_ini(config_file, pt);
+
+    	gpu_id = atoi(pt.get<std::string>("parameters.gpu_id").c_str());
+    	start_frame = atof(pt.get<std::string>("parameters.start_frame").c_str());
+    	dataset_dir = pt.get<std::string>("parameters.dataset_dir");
+    	magic_factor = atof(pt.get<std::string>("parameters.magic_factor").c_str());
+    	volume_size = atof(pt.get<std::string>("parameters.volume_size").c_str());
+    	img_cols = atoi(pt.get<std::string>("parameters.img_cols").c_str());
+    	img_rows = atoi(pt.get<std::string>("parameters.img_rows").c_str());
+    	focal_length = atoi(pt.get<std::string>("parameters.focal_length").c_str());
+
+    	cout << "[Parameters]" << endl;
+    	cout << "GPU_ID : \t" << gpu_id << endl;
+    	cout << "Start frame : \t" <<  start_frame << endl;
+    	cout << "Dataset dir : \t" <<  dataset_dir << endl;
+    	cout << "Magic factor: \t" <<  magic_factor << endl;
+    	cout << "Volume size : \t" <<  volume_size << endl;
+    	cout << "Img cols : \t" <<  img_cols << endl;
+    	cout << "Img rows : \t" <<  img_rows << endl;
+    	cout << "Focal length : \t" <<  focal_length << endl;
+	}
+};
 
 class SequenceSource 
 {
@@ -43,12 +87,11 @@ public:
         return result;
     }
 
-    SequenceSource(string _dataset_dir, float _magic_factor)
+    SequenceSource(string _dataset_dir, float _magic_factor, int start_frame)
     {
         dataset_dir = _dataset_dir;
         asso_file = _dataset_dir + "/associations.txt";
         magic_factor = _magic_factor;
-        cout << asso_file << endl;
 
         ifstream openFile(asso_file.c_str());
         if( openFile.is_open() ){
@@ -64,7 +107,7 @@ public:
             openFile.close();
         }
 
-        idx=0;
+        idx=start_frame;
         seq_n = color_files.size();
     }
 
@@ -398,56 +441,24 @@ struct KinFuApp
 
 int main (int argc, char* argv[])
 {
+
   if (argc < 2)
-    cout << "GPU device id is necessary." << endl;
+    cout << "[Error] Config file is necessary." << endl;
 
-  int device = atoi(argv[1]);
-  cuda::setDevice (device);
-  cuda::printShortCudaDeviceInfo (device);
+  ConfigParser config(argv[1]);
 
-  string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_teddy/rgbd_dataset_freiburg3_teddy/";
-  float magic_factor = 1;
-  float volume_size = 10.0f;
-  int img_cols = 640;
-  int img_rows = 480;
-  float focal_length = 525.0f;
+  cuda::setDevice (config.gpu_id);
+  cuda::printShortCudaDeviceInfo (config.gpu_id);
 
-//   string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg3_long_office_household/";
-//   float magic_factor = 1;
-//   float volume_size = 20.0f;
-//   int img_cols = 640;
-//   int img_rows = 480;
-//   float focal_length = 525.0f;
+  string dataset_dir = config.dataset_dir;
+  float magic_factor = config.magic_factor;
+  float volume_size = config.volume_size;
+  int img_cols = config.img_cols;
+  int img_rows = config.img_rows;
+  float focal_length = config.focal_length;
+  int start_frame = config.start_frame;
 
-//   string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg1_plant/rgbd_dataset_freiburg1_plant/";
-//   float magic_factor = 1;
-//   float volume_size = 10.0f;
-//   int img_cols = 640;
-//   int img_rows = 480;
-//   float focal_length = 525.0f;
-
-//   string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/TUM/3D Object Reconstruction/rgbd_dataset_freiburg1_teddy/rgbd_dataset_freiburg1_teddy/";
-//   float magic_factor = 1;
-//   float volume_size = 10.0f;
-//   int img_cols = 640;
-//   int img_rows = 480;
-//   float focal_length = 525.0f;
-
-//   string dataset_dir = "/media/dongwonshin/Ubuntu Data/Datasets/ICL-NUIM/living_room_traj0n_frei_png/";
-//   float magic_factor = 0.1;
-//   float volume_size = 5.0f;
-//   int img_cols = 640;
-//   int img_rows = 480;
-//   float focal_length = 525.0f;
-  
-  // string dataset_dir = "/home/dongwonshin/Desktop/SceneNetRGBD-val/val/0/4/";
-  // float magic_factor = 1.0f;
-  // float volume_size = 10.0f;
-  // int img_cols = 320;
-  // int img_rows = 240;
-  // float focal_length = 200.0f;
-
-  SequenceSource capture(dataset_dir, magic_factor);
+  SequenceSource capture(dataset_dir, magic_factor, start_frame);
 
   KinFuParams custom_params = KinFuParams::default_params();
   custom_params.integrate_color = true;
