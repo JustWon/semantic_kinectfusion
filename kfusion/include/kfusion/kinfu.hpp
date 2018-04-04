@@ -87,7 +87,7 @@ namespace kfusion
 
         void reset();
 
-        bool operator()(const cuda::Depth& depth, const cuda::Image& image = cuda::Image(), const cuda::Image& semantic = cuda::Image(),
+        int operator()(const cuda::Depth& depth, const cuda::Image& image = cuda::Image(), const cuda::Image& semantic = cuda::Image(),
         				const std::string timestamp = "000000.0000");
 
         void renderImage(cuda::Image& image, int flags = 0);
@@ -104,6 +104,8 @@ namespace kfusion
         void addEdge(int edge_id, g2o::OptimizableGraph::Vertex* first_vertex, g2o::VertexSE3* second_vertex, Eigen::Isometry3d& constraint);
         void addEdge(int edge_id, g2o::VertexSE3* first_vertex, g2o::OptimizableGraph::Vertex* second_vertex, Eigen::Isometry3d& constraint);
         bool estimateTransform(const cuda::Depth& source_depth, const cuda::Depth& target_depth, cv::Affine3f& transform, const int LEVELS, const KinFuParams& p);
+
+        int getFrameCounter() {return frame_counter_;}
 
     private:
         void allocate_buffers();

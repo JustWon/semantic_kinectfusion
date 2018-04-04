@@ -460,7 +460,7 @@ void ConsolePrint(std::string color, std::string text)
 			cout << "\033[1;37m" << text  << "\033[0m";
 }
 
-bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion::cuda::Image& image, const kfusion::cuda::Image& semantic, const std::string timestamp)
+int kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion::cuda::Image& image, const kfusion::cuda::Image& semantic, const std::string timestamp)
 {
 	bool keyframe_created = false;
 	bool kfc_flag = false;
@@ -513,7 +513,7 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
         curr_.normals_pyr.swap(prev_.normals_pyr);
         curr_.colors_pyr.swap(prev_.colors_pyr);
         curr_.semantics_pyr.swap(prev_.semantics_pyr);
-        return ++frame_counter_, false;
+        return ++frame_counter_, 0;
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -525,7 +525,8 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
 
         if (!ok) // failure case
         {
-            return reset(), false;
+        	cout << "tracking failure" << endl;
+            return 2;
         }
     }
     poses_.push_back(poses_.back() * affine);
@@ -690,7 +691,7 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
 
         loop_closure_detected = false;
         keyframe_created = false;
-		return ++frame_counter_, true;
+		return ++frame_counter_, 0;
 	}
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -725,7 +726,7 @@ bool kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion
         cuda::waitAllDefaultStream();
     }
 
-    return ++frame_counter_, true;
+    return ++frame_counter_, 1;
 }
 
 void kfusion::KinFu::renderImage(cuda::Image& image, int flag)

@@ -16,6 +16,56 @@ using namespace kfusion;
 using namespace std;
 
 
+bool outputMeshAsPly(const std::string& filename, const cv::viz::Mesh& mesh) {
+
+	std::ofstream stream(filename.c_str());
+
+	if (!stream) {
+	return false;
+	}
+
+	size_t num_points = mesh.cloud.cols; // the number of points in the mesh
+	stream << "ply" << std::endl;
+	stream << "format ascii 1.0" << std::endl;
+	stream << "element vertex " << num_points << std::endl;
+	stream << "property float x" << std::endl;
+	stream << "property float y" << std::endl;
+	stream << "property float z" << std::endl;
+
+	stream << "property uchar red" << std::endl;
+	stream << "property uchar green" << std::endl;
+	stream << "property uchar blue" << std::endl;
+
+    stream << "element face " << mesh.cloud.cols / 3 << std::endl;
+    stream << "property list uchar int vertex_index" << std::endl;
+
+    stream << "end_header" << std::endl;
+
+    char temp[100];
+	for (int i = 0 ; i < mesh.cloud.cols ; i++) {
+		stream << mesh.cloud.at<float>(4*i)   << " " <<
+				  mesh.cloud.at<float>(4*i+1) << " " <<
+				  mesh.cloud.at<float>(4*i+2) << " ";
+
+		sprintf(temp, "%d %d %d", mesh.colors.at<unsigned char>(4*i+2),
+				   	   	   	   	  mesh.colors.at<unsigned char>(4*i+1),
+				   	   	   	   	  mesh.colors.at<unsigned char>(4*i));
+		stream << temp << endl;
+	}
+
+	for (int i = 0 ; i < mesh.cloud.cols / 3 ; i++) {
+		sprintf(temp, "%d %d %d %d", mesh.polygons.at<int>(4*i),
+									 mesh.polygons.at<int>(4*i+3),
+									 mesh.polygons.at<int>(4*i+2),
+									 mesh.polygons.at<int>(4*i+1));
+		stream << temp << endl;
+	}
+
+	return true;
+}
+
+
+
 class ConfigParser
 {
 	boost::property_tree::ptree pt;
@@ -113,6 +163,13 @@ public:
 
     bool grab(cv::Mat& depth, cv::Mat& color, cv::Mat& semantic)
     {
+    	// end of frames
+        if (idx >= seq_n)
+        {
+            idx = 0;
+            return false;
+        }
+
         std::string depth_file_name;
         std::string color_file_name;
         std::string semantic_file_name;
@@ -139,13 +196,9 @@ public:
 
         // cv::imshow("color",color);
         // cv::imshow("depth",depth);
-//        cv::imshow("semantic",semantic);
+        // cv::imshow("semantic",semantic);
 
-        if (idx++ > seq_n)
-        {
-            idx = 0;
-            return false;
-        }
+        idx++;
 
         return true;
     }
@@ -185,12 +238,12 @@ struct KinFuApp
       if(event.code == 'm')
           kinfu.take_mesh(*kinfu.kinfu_, false);
       if(event.code == 'M')
-    	  kinfu.take_mesh(*kinfu.kinfu_, true);
+    	  kinfu.take_mesh(*kinfu.kinfu_, true, "mesh/color_mesh " + kinfu.capture_.current_timestamp() + ".ply");
 
       if(event.code == 's')
           kinfu.take_semantic_mesh(*kinfu.kinfu_, false);
       if(event.code == 'S')
-          kinfu.take_semantic_mesh(*kinfu.kinfu_, true);
+          kinfu.take_semantic_mesh(*kinfu.kinfu_, true, "mesh/semantic_mesh " + kinfu.capture_.current_timestamp() + ".ply");
   }
 
   KinFuApp(SequenceSource& source, const KinFuParams& params) : exit_ (false), capture_(source), interactive_mode_(false), pause_(false) {
@@ -268,7 +321,7 @@ struct KinFuApp
    * @brief Run marching cubes on the volume and construct the mesh
    * @param[in] kinfu instance
    */
-  void take_mesh(KinFu& kinfu, bool save_mesh)
+  void take_mesh(KinFu& kinfu, bool save_mesh, string mesh_string = "color_mesh.ply")
   {
       if (!marching_cubes_)
           marching_cubes_ = cv::Ptr<cuda::MarchingCubes>(new cuda::MarchingCubes());
@@ -298,8 +351,10 @@ struct KinFuApp
 
       triangles.download(mesh.cloud.ptr<Point>());
 
-      if (save_mesh)
-    	  cv::viz::writeCloud("color_mesh.ply", mesh.cloud, mesh.colors, mesh.normals, true); 
+      if (save_mesh){
+//    	  cv::viz::writeCloud(mesh_string, mesh.cloud, mesh.colors, mesh.normals, false);
+    	  outputMeshAsPly(mesh_string, mesh);
+      }
 
       viz.showWidget("cloud", cv::viz::WMesh(mesh));
 
@@ -307,7 +362,7 @@ struct KinFuApp
       // cv::waitKey(0);
   }
 
-    void take_semantic_mesh(KinFu& kinfu, bool save_mesh)
+  void take_semantic_mesh(KinFu& kinfu, bool save_mesh, string mesh_string = "semantic_mesh.ply")
   {
       if (!marching_cubes_)
           marching_cubes_ = cv::Ptr<cuda::MarchingCubes>(new cuda::MarchingCubes());
@@ -338,7 +393,8 @@ struct KinFuApp
       triangles.download(mesh.cloud.ptr<Point>());
 
       if (save_mesh)
-    	  cv::viz::writeCloud("semantic_mesh.ply", mesh.cloud, mesh.colors, mesh.normals, true);
+//    	  cv::viz::writeCloud("semantic_mesh.ply", mesh.cloud, mesh.colors, mesh.normals, true);
+    	  outputMeshAsPly(mesh_string, mesh);
 
       viz.showWidget("cloud", cv::viz::WMesh(mesh));
 
@@ -357,13 +413,17 @@ struct KinFuApp
       KinFu& kinfu = *kinfu_;
       cv::Mat depth, image, semantic;
       double time_ms = 0;
-      bool has_image = false;
+      int kinfu_return_val= 0;
 
       for (int i = 0; !exit_ && !viz.wasStopped(); ++i)
       {
-          bool has_frame = capture_.grab(depth, image, semantic);
-          if (!has_frame)
-              return std::cout << "Can't grab" << std::endl, false;
+          bool end_of_frame = capture_.grab(depth, image, semantic);
+          if (!end_of_frame)
+          {
+               std::cout << "Can't grab" << std::endl;
+               take_mesh(kinfu, true, "mesh/color_mesh [finish].ply");
+               return false;
+          }
 
           depth_device_.upload(depth.data, depth.step, depth.rows, depth.cols);
           color_device_.upload(image.data, image.step, image.rows, image.cols);
@@ -372,13 +432,27 @@ struct KinFuApp
           {
               SampledScopeTime fps(time_ms); (void)fps;
               if (kinfu.params().integrate_color)
-                  has_image = kinfu(depth_device_, color_device_, semantic_device_, capture_.current_timestamp());
+            	  kinfu_return_val = kinfu(depth_device_, color_device_, semantic_device_, capture_.current_timestamp());
               else
-                  has_image = kinfu(depth_device_);
+            	  kinfu_return_val = kinfu(depth_device_);
           }
 
-          if (has_image)
-              show_raycasted(kinfu);
+          // volume save
+          if (kinfu_return_val == 1)		// tracking success
+          {
+        	  show_raycasted(kinfu);
+//        	  if (kinfu.getFrameCounter() % 100 == 0)
+//        	  {
+//        		  take_mesh(kinfu, true, "mesh/color_mesh " + capture_.current_timestamp() + "[split].ply");
+//        		  kinfu.clearVolumes();
+//        	  }
+          }
+          else if (kinfu_return_val == 2)	// tracking failure,
+          {
+        	  if (kinfu.getFrameCounter() > 50)	// the number of frame until the failure point should be bigger than 50.
+        		  take_mesh(kinfu, true, "mesh/color_mesh " + capture_.current_timestamp() + "[faliure].ply");
+        	  kinfu.reset();
+          }
 
           if (!interactive_mode_)
               viz.setViewerPose(kinfu.getCameraPose());
@@ -390,9 +464,9 @@ struct KinFuApp
           case 't': case 'T' : take_cloud(kinfu); break;
           case 'i': case 'I' : interactive_mode_ = !interactive_mode_; break;
           case 'm': take_mesh(kinfu, false); break;
-          case 'M': take_mesh(kinfu, true); break;
+          case 'M': take_mesh(kinfu, true, "mesh/color_mesh " + capture_.current_timestamp() + ".ply"); break;
           case 's': take_semantic_mesh(kinfu, false); break;
-          case 'S': take_semantic_mesh(kinfu, true); break;
+          case 'S': take_semantic_mesh(kinfu, true, "mesh/semantic_mesh " + capture_.current_timestamp() + ".ply"); break;
           case 27: exit_ = true; break;
           case 32: pause_ = !pause_; break;
           }
@@ -473,8 +547,8 @@ int main (int argc, char* argv[])
   custom_params.cols = img_cols;
   custom_params.rows = img_rows;
   custom_params.intr = Intr(focal_length, focal_length, custom_params.cols/2 - 0.5f, custom_params.rows/2 - 0.5f);
-  custom_params.icp_dist_thres = 0.25f;                //meters
-  custom_params.icp_angle_thres = deg2rad(30.f); //radians
+  custom_params.icp_dist_thres = 0.25;                //meters
+  custom_params.icp_angle_thres = deg2rad(30); //radians
 
   KinFuApp app (capture, custom_params);
 
