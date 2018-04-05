@@ -441,6 +441,71 @@ bool kfusion::KinFu::estimateTransform(const cuda::Depth& source_depth, const cu
 	 return ok;
 }
 
+//subvolume approach
+void kfusion::KinFu::storeSubvolume()
+{
+	cuda::DeviceArray<Point> cloud_buffer_;
+	cuda::DeviceArray<RGB> color_buffer_;
+
+	cuda::DeviceArray<Point> cloud = this->tsdf().fetchCloud(cloud_buffer_);
+	cv::Mat cloud_host(1, (int)cloud.size(), CV_32FC4);
+
+	this->color_volume()->fetchColors(cloud, color_buffer_);
+	cv::Mat color_host(1, (int)cloud.size(), CV_8UC4);
+	cloud.download(cloud_host.ptr<Point>());
+	color_buffer_.download(color_host.ptr<RGB>());
+	vec_subvolume.push_back(cloud_host);
+
+//	for (int i = 0 ; i < vec_subvolume.size() ; i++)
+//		cout << "vec_subvolume[" << i << "].cols : " << vec_subvolume[i].cols << endl;
+}
+
+void kfusion::KinFu::storePoseVector()
+{
+	Affine3f last_pose = getLastSucessPose();
+
+	for (int i = 0 ; i < poses_.size() ; i++)
+	{
+		poses_[i] = last_pose*poses_[i];
+	}
+
+	vec_poses.push_back(this->poses_);
+//	for (int i = 0 ; i < vec_poses.size() ; i++)
+//		cout << "vec_poses[" << i << "].size() : " << vec_poses[i].size() << endl;
+}
+
+void kfusion::KinFu::saveEstimatedTrajectories()
+{
+	cout << "saveEstimatedTrajectories" << endl;
+	storePoseVector();
+
+	ofstream ofile("estimated_trajectories.txt");
+	ofile << "#timestamp tx ty tz qx qy qz qw" << endl;
+
+	int temp_idx = 0;
+	for (int i = 0 ; i < vec_poses.size() ; i++)
+	{
+		std::vector<Affine3f> cur_poses = vec_poses[i];
+		for (int j = 0 ; j < cur_poses.size() ; j++)
+		{
+			ofile << vec_timestamp[temp_idx++] << " "
+				  << cur_poses[j].translation()[0] << " "
+				  << cur_poses[j].translation()[1] << " "
+				  << cur_poses[j].translation()[2] << " "
+				  << "0 0 0 1" << endl;
+		}
+	}
+	ofile.close();
+}
+
+Affine3f kfusion::KinFu::getLastSucessPose()
+{
+	Affine3f ret;
+	if (vec_poses.size() > 0)
+		ret = vec_poses.back().back();
+	return ret;
+}
+
 void ConsolePrint(std::string color, std::string text)
 {
 	// https://stackoverflow.com/questions/2616906/how-do-i-output-coloured-text-to-a-linux-terminal
@@ -459,6 +524,7 @@ void ConsolePrint(std::string color, std::string text)
 	else if (color == "white")
 			cout << "\033[1;37m" << text  << "\033[0m";
 }
+
 
 int kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion::cuda::Image& image, const kfusion::cuda::Image& semantic, const std::string timestamp)
 {
@@ -493,8 +559,8 @@ int kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion:
     	vec_image.push_back(image_copy);
     	cuda::Image semantic_copy; semantic.copyTo(semantic_copy);
     	vec_semantic.push_back(semantic_copy);
-    	vec_timestamp.push_back(timestamp);
     }
+    vec_timestamp.push_back(timestamp);
 
     // sliding window
     if (sliding_vec_depth.size() > kfc_window){

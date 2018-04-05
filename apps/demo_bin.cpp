@@ -16,7 +16,7 @@ using namespace kfusion;
 using namespace std;
 
 
-bool outputMeshAsPly(const std::string& filename, const cv::viz::Mesh& mesh) {
+bool outputMeshAsPly(KinFu& kinfu, const std::string& filename, const cv::viz::Mesh& mesh) {
 
 	std::ofstream stream(filename.c_str());
 
@@ -41,11 +41,20 @@ bool outputMeshAsPly(const std::string& filename, const cv::viz::Mesh& mesh) {
 
     stream << "end_header" << std::endl;
 
+    Affine3f last_pose = kinfu.getLastSucessPose();
+
     char temp[100];
 	for (int i = 0 ; i < mesh.cloud.cols ; i++) {
-		stream << mesh.cloud.at<float>(4*i)   << " " <<
-				  mesh.cloud.at<float>(4*i+1) << " " <<
-				  mesh.cloud.at<float>(4*i+2) << " ";
+		cv::Affine3f::Vec3 point(mesh.cloud.at<float>(4*i),mesh.cloud.at<float>(4*i+1),mesh.cloud.at<float>(4*i+2));
+		point = last_pose*point;
+
+		stream << point(0) << " " <<
+				  point(1) << " " <<
+				  point(2) << " ";
+
+//		stream << mesh.cloud.at<float>(4*i)   << " " <<
+//				  mesh.cloud.at<float>(4*i+1) << " " <<
+//				  mesh.cloud.at<float>(4*i+2) << " ";
 
 		sprintf(temp, "%d %d %d", mesh.colors.at<unsigned char>(4*i+2),
 				   	   	   	   	  mesh.colors.at<unsigned char>(4*i+1),
@@ -63,8 +72,6 @@ bool outputMeshAsPly(const std::string& filename, const cv::viz::Mesh& mesh) {
 
 	return true;
 }
-
-
 
 class ConfigParser
 {
@@ -351,10 +358,8 @@ struct KinFuApp
 
       triangles.download(mesh.cloud.ptr<Point>());
 
-      if (save_mesh){
-//    	  cv::viz::writeCloud(mesh_string, mesh.cloud, mesh.colors, mesh.normals, false);
-    	  outputMeshAsPly(mesh_string, mesh);
-      }
+      if (save_mesh)
+    	  outputMeshAsPly(kinfu, mesh_string, mesh);
 
       viz.showWidget("cloud", cv::viz::WMesh(mesh));
 
@@ -393,8 +398,7 @@ struct KinFuApp
       triangles.download(mesh.cloud.ptr<Point>());
 
       if (save_mesh)
-//    	  cv::viz::writeCloud("semantic_mesh.ply", mesh.cloud, mesh.colors, mesh.normals, true);
-    	  outputMeshAsPly(mesh_string, mesh);
+    	  outputMeshAsPly(kinfu, mesh_string, mesh);
 
       viz.showWidget("cloud", cv::viz::WMesh(mesh));
 
@@ -417,11 +421,11 @@ struct KinFuApp
 
       for (int i = 0; !exit_ && !viz.wasStopped(); ++i)
       {
-          bool end_of_frame = capture_.grab(depth, image, semantic);
-          if (!end_of_frame)
+          if (!capture_.grab(depth, image, semantic))
           {
-               std::cout << "Can't grab" << std::endl;
+               std::cout << "[End of frames]" << std::endl;
                take_mesh(kinfu, true, "mesh/color_mesh [finish].ply");
+               kinfu.saveEstimatedTrajectories();
                return false;
           }
 
@@ -429,13 +433,8 @@ struct KinFuApp
           color_device_.upload(image.data, image.step, image.rows, image.cols);
           semantic_device_.upload(semantic.data, semantic.step, semantic.rows, semantic.cols);
 
-          {
-              SampledScopeTime fps(time_ms); (void)fps;
-              if (kinfu.params().integrate_color)
-            	  kinfu_return_val = kinfu(depth_device_, color_device_, semantic_device_, capture_.current_timestamp());
-              else
-            	  kinfu_return_val = kinfu(depth_device_);
-          }
+		  SampledScopeTime fps(time_ms); (void)fps;
+		  kinfu_return_val = kinfu(depth_device_, color_device_, semantic_device_, capture_.current_timestamp());
 
           // volume save
           if (kinfu_return_val == 1)		// tracking success
@@ -443,32 +442,41 @@ struct KinFuApp
         	  show_raycasted(kinfu);
 //        	  if (kinfu.getFrameCounter() % 100 == 0)
 //        	  {
-//        		  take_mesh(kinfu, true, "mesh/color_mesh " + capture_.current_timestamp() + "[split].ply");
 //        		  kinfu.clearVolumes();
+//        		  kinfu.storeSubvolume();
+//        		  kinfu.storePoseVector();
 //        	  }
           }
           else if (kinfu_return_val == 2)	// tracking failure,
           {
         	  if (kinfu.getFrameCounter() > 50)	// the number of frame until the failure point should be bigger than 50.
+        	  {
         		  take_mesh(kinfu, true, "mesh/color_mesh " + capture_.current_timestamp() + "[faliure].ply");
+				  kinfu.storeSubvolume();
+				  kinfu.storePoseVector();
+        	  }
         	  kinfu.reset();
           }
+
+
 
           if (!interactive_mode_)
               viz.setViewerPose(kinfu.getCameraPose());
 
           int key = cv::waitKey(pause_ ? 0 : 1);
-
           switch(key)
           {
-          case 't': case 'T' : take_cloud(kinfu); break;
-          case 'i': case 'I' : interactive_mode_ = !interactive_mode_; break;
-          case 'm': take_mesh(kinfu, false); break;
-          case 'M': take_mesh(kinfu, true, "mesh/color_mesh " + capture_.current_timestamp() + ".ply"); break;
-          case 's': take_semantic_mesh(kinfu, false); break;
-          case 'S': take_semantic_mesh(kinfu, true, "mesh/semantic_mesh " + capture_.current_timestamp() + ".ply"); break;
-          case 27: exit_ = true; break;
-          case 32: pause_ = !pause_; break;
+			  case 't': case 'T' : take_cloud(kinfu); break;
+			  case 'i': case 'I' : interactive_mode_ = !interactive_mode_; break;
+			  case 'm': take_mesh(kinfu, false); break;
+			  case 'M': take_mesh(kinfu, true, "mesh/color_mesh " + capture_.current_timestamp() + ".ply"); break;
+			  case 's': take_semantic_mesh(kinfu, false); break;
+			  case 'S': take_semantic_mesh(kinfu, true, "mesh/semantic_mesh " + capture_.current_timestamp() + ".ply"); break;
+			  case 27:
+				  kinfu.saveEstimatedTrajectories();
+				  exit_ = true;
+				  break;
+			  case 32: pause_ = !pause_; break;
           }
 
           //exit_ = exit_ || i > 100;

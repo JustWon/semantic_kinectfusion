@@ -107,6 +107,13 @@ namespace kfusion
 
         int getFrameCounter() {return frame_counter_;}
 
+        void storeSubvolume();
+        void storePoseVector();
+
+        void saveEstimatedTrajectories();
+
+        Affine3f getLastSucessPose();
+
     private:
         void allocate_buffers();
 
@@ -114,6 +121,7 @@ namespace kfusion
         KinFuParams params_;
 
         std::vector<Affine3f> poses_;
+        std::vector<std::vector<Affine3f>> vec_poses;
 
         cuda::Dists dists_;
         cuda::Frame curr_, prev_;
@@ -144,8 +152,11 @@ namespace kfusion
         std::vector<cuda::Depth> sliding_vec_depth;
         std::vector<int> vec_keyframe_id;
 
-
         int pre_keyframe_idx = 0;
         int cur_keyframe_idx = 0;
+
+        // subvolumes
+        std::vector<cv::Mat> vec_subvolume;
+        std::vector<cv::Mat> vec_subcolorvolume;
     };
 }
