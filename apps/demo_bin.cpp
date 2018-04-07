@@ -6,24 +6,20 @@
 #include <kfusion/kinfu.hpp>
 #include <kfusion/cuda/marching_cubes.hpp>
 //#include <io/capture.hpp>
-#include <io/bin_grabber.hpp>
+//#include <io/bin_grabber.hpp>
 #include <string>
+#include <thread>
 
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 
+
 using namespace kfusion;
 using namespace std;
 
-
-bool outputMeshAsPly(KinFu& kinfu, const std::string& filename, const cv::viz::Mesh& mesh) {
-
+void outputMeshAsPly(const std::string& filename, const cv::viz::Mesh& mesh, const Affine3f last_pose)
+{
 	std::ofstream stream(filename.c_str());
-
-	if (!stream) {
-	return false;
-	}
-
 	size_t num_points = mesh.cloud.cols; // the number of points in the mesh
 	stream << "ply" << std::endl;
 	stream << "format ascii 1.0" << std::endl;
@@ -41,34 +37,22 @@ bool outputMeshAsPly(KinFu& kinfu, const std::string& filename, const cv::viz::M
 
     stream << "end_header" << std::endl;
 
-    Affine3f last_pose = kinfu.getLastSucessPose();
-
-    char temp[100];
+	char temp[100];
 	for (int i = 0 ; i < mesh.cloud.cols ; i++) {
 		cv::Affine3f::Vec3 point(mesh.cloud.at<float>(4*i),mesh.cloud.at<float>(4*i+1),mesh.cloud.at<float>(4*i+2));
 		point = last_pose*point;
 
 		stream << point(0) << " " << point(1) << " " << point(2) << " ";
 
-//		stream << mesh.cloud.at<float>(4*i)   << " " <<
-//				  mesh.cloud.at<float>(4*i+1) << " " <<
-//				  mesh.cloud.at<float>(4*i+2) << " ";
-
 		sprintf(temp, "%d %d %d", mesh.colors.at<unsigned char>(4*i+2),
-				   	   	   	   	  mesh.colors.at<unsigned char>(4*i+1),
-				   	   	   	   	  mesh.colors.at<unsigned char>(4*i));
+								  mesh.colors.at<unsigned char>(4*i+1),
+								  mesh.colors.at<unsigned char>(4*i));
 		stream << temp << endl;
 	}
-
-	for (int i = 0 ; i < mesh.cloud.cols / 3 ; i++) {
-		sprintf(temp, "%d %d %d %d", mesh.polygons.at<int>(4*i),
-									 mesh.polygons.at<int>(4*i+3),
-									 mesh.polygons.at<int>(4*i+2),
-									 mesh.polygons.at<int>(4*i+1));
+	for (int i = 0 ; i < mesh.cloud.cols/3 ; i++) {
+		sprintf(temp, "3 %d %d %d",  3*i+2, 3*i+1, 3*i+0);
 		stream << temp << endl;
 	}
-
-	return true;
 }
 
 class ConfigParser
@@ -359,7 +343,10 @@ struct KinFuApp
       viz.showWidget("cloud", cv::viz::WMesh(mesh));
 
       if (save_mesh)
-          	  outputMeshAsPly(kinfu, mesh_string, mesh);
+      {
+		  std::thread myThread(outputMeshAsPly, mesh_string, mesh, kinfu.getLastSucessPose());
+		  myThread.detach();
+      }
 
       // cv::imshow("mesh_colors", mesh_colors);
       // cv::waitKey(0);
@@ -395,10 +382,13 @@ struct KinFuApp
 
       triangles.download(mesh.cloud.ptr<Point>());
 
-      if (save_mesh)
-    	  outputMeshAsPly(kinfu, mesh_string, mesh);
-
       viz.showWidget("cloud", cv::viz::WMesh(mesh));
+
+      if (save_mesh)
+      {
+		  std::thread myThread(outputMeshAsPly, mesh_string, mesh, kinfu.getLastSucessPose());
+		  myThread.detach();
+      }
 
       // cv::imshow("mesh_colors", mesh_colors);
       // cv::waitKey(0);
@@ -438,13 +428,13 @@ struct KinFuApp
           if (kinfu_return_val == 1)		// tracking success
           {
         	  show_raycasted(kinfu);
-        	  if (kinfu.getFrameCounter() ==  2000)
-        	  {
-        		  take_mesh(kinfu, true, "mesh/color_mesh " + capture_.current_timestamp() + "[2300].ply");
+//        	  if (kinfu.getFrameCounter() % 100 == 0)
+//        	  {
+//        		  take_mesh(kinfu, true, "mesh/color_mesh " + capture_.current_timestamp() + "[split].ply");
 //        		  kinfu.storeSubvolume();
 //        		  kinfu.storePoseVector();
 //        		  kinfu.clearVolumes();
-        	  }
+//        	  }
           }
           else if (kinfu_return_val == 2)	// tracking failure,
           {
