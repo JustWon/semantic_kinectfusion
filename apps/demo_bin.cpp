@@ -17,42 +17,86 @@
 using namespace kfusion;
 using namespace std;
 
-void outputMeshAsPly(const std::string& filename, const cv::viz::Mesh& mesh, const Affine3f last_pose)
+void outputMeshAsPly(const std::string& filename, const cv::viz::Mesh& mesh, const Affine3f last_pose, int file_type)
 {
-	std::ofstream stream(filename.c_str());
-	size_t num_points = mesh.cloud.cols; // the number of points in the mesh
-	stream << "ply" << std::endl;
-	stream << "format ascii 1.0" << std::endl;
-	stream << "element vertex " << num_points << std::endl;
-	stream << "property float x" << std::endl;
-	stream << "property float y" << std::endl;
-	stream << "property float z" << std::endl;
+    if (file_type == 0){
+    	std::ofstream stream(filename.c_str());
+    	size_t num_points = mesh.cloud.cols; // the number of points in the mesh
+    	stream << "ply" << std::endl;
+    	stream << "format ascii 1.0" << std::endl;
+    	stream << "element vertex " << num_points << std::endl;
+    	stream << "property float x" << std::endl;
+    	stream << "property float y" << std::endl;
+    	stream << "property float z" << std::endl;
 
-	stream << "property uchar red" << std::endl;
-	stream << "property uchar green" << std::endl;
-	stream << "property uchar blue" << std::endl;
+    	stream << "property uchar red" << std::endl;
+    	stream << "property uchar green" << std::endl;
+    	stream << "property uchar blue" << std::endl;
 
-    stream << "element face " << mesh.cloud.cols / 3 << std::endl;
-    stream << "property list uchar int vertex_index" << std::endl;
+        stream << "element face " << mesh.cloud.cols / 3 << std::endl;
+        stream << "property list uchar int vertex_index" << std::endl;
 
-    stream << "end_header" << std::endl;
+        stream << "end_header" << std::endl;
 
-	char temp[100];
-	for (int i = 0 ; i < mesh.cloud.cols ; i++) {
-		cv::Affine3f::Vec3 point(mesh.cloud.at<float>(4*i),mesh.cloud.at<float>(4*i+1),mesh.cloud.at<float>(4*i+2));
-		point = last_pose*point;
+    	char temp[100];
+		for (int i = 0 ; i < mesh.cloud.cols ; i++) {
+			cv::Affine3f::Vec3 point(mesh.cloud.at<float>(4*i),mesh.cloud.at<float>(4*i+1),mesh.cloud.at<float>(4*i+2));
+			point = last_pose*point;
 
-		stream << point(0) << " " << point(1) << " " << point(2) << " ";
+			stream << point(0) << " " << point(1) << " " << point(2) << " ";
 
-		sprintf(temp, "%d %d %d", mesh.colors.at<unsigned char>(4*i+2),
-								  mesh.colors.at<unsigned char>(4*i+1),
-								  mesh.colors.at<unsigned char>(4*i));
-		stream << temp << endl;
-	}
-	for (int i = 0 ; i < mesh.cloud.cols/3 ; i++) {
-		sprintf(temp, "3 %d %d %d",  3*i+2, 3*i+1, 3*i+0);
-		stream << temp << endl;
-	}
+			sprintf(temp, "%d %d %d", mesh.colors.at<unsigned char>(4*i+2),
+									  mesh.colors.at<unsigned char>(4*i+1),
+									  mesh.colors.at<unsigned char>(4*i));
+			stream << temp << endl;
+		}
+		for (int i = 0 ; i < mesh.cloud.cols/3 ; i++) {
+			sprintf(temp, "3 %d %d %d",  3*i+2, 3*i+1, 3*i+0);
+			stream << temp << endl;
+		}
+		stream.close();
+    }
+    else {
+    	std::ofstream stream(filename.c_str() , ios::binary);
+		size_t num_points = mesh.cloud.cols; // the number of points in the mesh
+		stream << "ply" << std::endl;
+		stream << "format binary_little_endian 1.0" << std::endl;
+		stream << "element vertex " << num_points << std::endl;
+		stream << "property float x" << std::endl;
+		stream << "property float y" << std::endl;
+		stream << "property float z" << std::endl;
+
+		stream << "property uchar red" << std::endl;
+		stream << "property uchar green" << std::endl;
+		stream << "property uchar blue" << std::endl;
+
+		stream << "element face " << mesh.cloud.cols / 3 << std::endl;
+		stream << "property list uchar int vertex_index" << std::endl;
+
+		stream << "end_header" << std::endl;
+
+		char temp[100];
+		for (int i = 0 ; i < mesh.cloud.cols ; i++) {
+			cv::Affine3f::Vec3 point(mesh.cloud.at<float>(4*i),
+									 mesh.cloud.at<float>(4*i+1),
+									 mesh.cloud.at<float>(4*i+2));
+			point = last_pose*point;
+			stream.write(reinterpret_cast<const char*>(&point(0)), sizeof(float));
+			stream.write(reinterpret_cast<const char*>(&point(1)), sizeof(float));
+			stream.write(reinterpret_cast<const char*>(&point(2)), sizeof(float));
+
+			stream.write(reinterpret_cast<const char*>(&mesh.colors.at<unsigned char>(4*i+2)), sizeof(char));
+			stream.write(reinterpret_cast<const char*>(&mesh.colors.at<unsigned char>(4*i+1)), sizeof(char));
+			stream.write(reinterpret_cast<const char*>(&mesh.colors.at<unsigned char>(4*i)), sizeof(char));
+		}
+		for (int i = 0 ; i < mesh.cloud.cols/3 ; i++) {
+			stream.write(reinterpret_cast<const char*>(&mesh.polygons.at<int>(4*i)), sizeof(char));
+			stream.write(reinterpret_cast<const char*>(&mesh.polygons.at<int>(4*i+3)), sizeof(int));
+			stream.write(reinterpret_cast<const char*>(&mesh.polygons.at<int>(4*i+2)), sizeof(int));
+			stream.write(reinterpret_cast<const char*>(&mesh.polygons.at<int>(4*i+1)), sizeof(int));
+		}
+		stream.close();
+    }
 }
 
 class ConfigParser
@@ -310,7 +354,7 @@ struct KinFuApp
    * @brief Run marching cubes on the volume and construct the mesh
    * @param[in] kinfu instance
    */
-  void take_mesh(KinFu& kinfu, bool save_mesh, string mesh_string = "color_mesh.ply")
+  void take_mesh(KinFu& kinfu, bool save_mesh, string mesh_string = "color_mesh.ply", bool last_frame=false)
   {
       if (!marching_cubes_)
           marching_cubes_ = cv::Ptr<cuda::MarchingCubes>(new cuda::MarchingCubes());
@@ -344,8 +388,11 @@ struct KinFuApp
 
       if (save_mesh)
       {
-		  std::thread myThread(outputMeshAsPly, mesh_string, mesh, kinfu.getLastSucessPose());
-		  myThread.detach();
+		  std::thread myThread(outputMeshAsPly, mesh_string, mesh, kinfu.getLastSucessPose(),1);
+		  if (!last_frame)
+			  myThread.detach();
+		  else // if it is the last frame, we should wait
+			  myThread.join();
       }
 
       // cv::imshow("mesh_colors", mesh_colors);
@@ -386,7 +433,7 @@ struct KinFuApp
 
       if (save_mesh)
       {
-		  std::thread myThread(outputMeshAsPly, mesh_string, mesh, kinfu.getLastSucessPose());
+		  std::thread myThread(outputMeshAsPly, mesh_string, mesh, kinfu.getLastSucessPose(),1);
 		  myThread.detach();
       }
 
@@ -412,7 +459,7 @@ struct KinFuApp
           if (!capture_.grab(depth, image, semantic))
           {
                std::cout << "[End of frames]" << std::endl;
-               take_mesh(kinfu, true, "mesh/color_mesh [finish].ply");
+               take_mesh(kinfu, true, "mesh/color_mesh [finish].ply", true);
                kinfu.saveEstimatedTrajectories();
                return false;
           }
