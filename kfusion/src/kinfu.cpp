@@ -454,7 +454,14 @@ void kfusion::KinFu::storeSubvolume()
 	cv::Mat color_host(1, (int)cloud.size(), CV_8UC4);
 	cloud.download(cloud_host.ptr<Point>());
 	color_buffer_.download(color_host.ptr<RGB>());
+
+	// To do: it should be a tsdf volume rather than a point cloud.
 	vec_subvolume.push_back(cloud_host);
+
+	// if several subvolumes exist in the vector, register them
+	// how to register them..?
+
+
 
 //	for (int i = 0 ; i < vec_subvolume.size() ; i++)
 //		cout << "vec_subvolume[" << i << "].cols : " << vec_subvolume[i].cols << endl;

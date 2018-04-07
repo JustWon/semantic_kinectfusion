@@ -48,9 +48,7 @@ bool outputMeshAsPly(KinFu& kinfu, const std::string& filename, const cv::viz::M
 		cv::Affine3f::Vec3 point(mesh.cloud.at<float>(4*i),mesh.cloud.at<float>(4*i+1),mesh.cloud.at<float>(4*i+2));
 		point = last_pose*point;
 
-		stream << point(0) << " " <<
-				  point(1) << " " <<
-				  point(2) << " ";
+		stream << point(0) << " " << point(1) << " " << point(2) << " ";
 
 //		stream << mesh.cloud.at<float>(4*i)   << " " <<
 //				  mesh.cloud.at<float>(4*i+1) << " " <<
@@ -358,10 +356,10 @@ struct KinFuApp
 
       triangles.download(mesh.cloud.ptr<Point>());
 
-      if (save_mesh)
-    	  outputMeshAsPly(kinfu, mesh_string, mesh);
-
       viz.showWidget("cloud", cv::viz::WMesh(mesh));
+
+      if (save_mesh)
+          	  outputMeshAsPly(kinfu, mesh_string, mesh);
 
       // cv::imshow("mesh_colors", mesh_colors);
       // cv::waitKey(0);
@@ -440,12 +438,13 @@ struct KinFuApp
           if (kinfu_return_val == 1)		// tracking success
           {
         	  show_raycasted(kinfu);
-//        	  if (kinfu.getFrameCounter() % 100 == 0)
-//        	  {
-//        		  kinfu.clearVolumes();
+        	  if (kinfu.getFrameCounter() ==  2000)
+        	  {
+        		  take_mesh(kinfu, true, "mesh/color_mesh " + capture_.current_timestamp() + "[2300].ply");
 //        		  kinfu.storeSubvolume();
 //        		  kinfu.storePoseVector();
-//        	  }
+//        		  kinfu.clearVolumes();
+        	  }
           }
           else if (kinfu_return_val == 2)	// tracking failure,
           {
@@ -457,7 +456,7 @@ struct KinFuApp
         	  }
         	  kinfu.reset();
           }
-
+          // else if (inconsistent model)
 
 
           if (!interactive_mode_)
