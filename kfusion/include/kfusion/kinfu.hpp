@@ -109,6 +109,7 @@ namespace kfusion
 
         void storeSubvolume();
         void storePoseVector();
+        void storeTransformedPoseVector();
 
         void saveEstimatedTrajectories();
 

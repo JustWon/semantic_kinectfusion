@@ -470,21 +470,26 @@ void kfusion::KinFu::storeSubvolume()
 
 void kfusion::KinFu::storePoseVector()
 {
+	vec_poses.push_back(this->poses_);
+}
+
+void kfusion::KinFu::storeTransformedPoseVector()
+{
 	Affine3f last_pose = getLastSucessPose();
+	cout << "last_pose : " << last_pose.translation() << endl;
+//	std::vector<Affine3f> poses_temp;
 
 	for (int i = 0 ; i < poses_.size() ; i++)
 	{
 		poses_[i] = last_pose*poses_[i];
 	}
 
-	vec_poses.push_back(this->poses_);
-//	for (int i = 0 ; i < vec_poses.size() ; i++)
-//		cout << "vec_poses[" << i << "].size() : " << vec_poses[i].size() << endl;
+	vec_poses.push_back(poses_);
 }
 
 void kfusion::KinFu::saveEstimatedTrajectories()
 {
-	cout << "saveEstimatedTrajectories" << endl;
+	DW_Utility::consolePrint("green","saveEstimatedTrajectories");
 	storePoseVector();
 
 	ofstream ofile("estimated_trajectories.txt");
@@ -516,12 +521,6 @@ Affine3f kfusion::KinFu::getLastSucessPose()
 
 int kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion::cuda::Image& image, const kfusion::cuda::Image& semantic, const std::string timestamp)
 {
-//	bool keyframe_created = false;
-//	bool kfc_flag = false;
-//	int keyframe_interval = 5;
-//	int kfc_window = keyframe_interval/2+2;
-//	bool loop_closure_detected = false;
-
     const KinFuParams& p = params_;
     const int LEVELS = icp_->getUsedLevelsNum();
 
@@ -537,25 +536,7 @@ int kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion:
     for (int i = 0; i < LEVELS; ++i)
         cuda::computePointNormals(p.intr(i), curr_.depth_pyr[i], curr_.points_pyr[i], curr_.normals_pyr[i]);
 
-//    if (frame_counter_ % keyframe_interval == 0)
-//    {
-//        cuda::Depth depth_copy; depth.copyTo(depth_copy);
-//        vec_depth.push_back(depth_copy);
-//        cuda::Dists dists_copy; dists_.copyTo(dists_copy);
-//    	vec_dist.push_back(dists_copy);
-//    	cuda::Image image_copy; image.copyTo(image_copy);
-//    	vec_image.push_back(image_copy);
-//    	cuda::Image semantic_copy; semantic.copyTo(semantic_copy);
-//    	vec_semantic.push_back(semantic_copy);
-//    }
     vec_timestamp.push_back(timestamp);
-
-//    // sliding window
-//    if (sliding_vec_depth.size() > kfc_window){
-//    	sliding_vec_depth.erase(sliding_vec_depth.begin());
-//    }
-//    cuda::Depth depth_copy; depth.copyTo(depth_copy);
-//    sliding_vec_depth.push_back(depth_copy);
 
     cuda::waitAllDefaultStream();
 
@@ -584,169 +565,6 @@ int kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion:
         }
     }
     poses_.push_back(poses_.back() * affine);
-
-//    // keyframe graph construction
-//    if (frame_counter_ % keyframe_interval == 0) {
-//    	cur_keyframe_idx = frame_counter_;
-//
-//    	DW_Utility::consolePrint("green", "[keyframe created] ");
-//    	cout << "keyframe idx: " << cur_keyframe_idx << endl;
-//
-//    	// transformation between the previous keyframe and the current keyframe
-//    	cv::Affine3f keyframe_odom = cv::Affine3f::Identity();
-//    	keyframe_odom = poses_[pre_keyframe_idx].inv()*poses_[cur_keyframe_idx];
-//
-//		Eigen::Isometry3d edge_con;
-//		Affine3fToIsometry3d(keyframe_odom, edge_con);
-//
-//		// current pose
-//		Eigen::Isometry3d current_pose;
-//		Affine3fToIsometry3d(poses_.back(),current_pose);
-//
-////		cout << poses_.back().translation() << endl;
-//
-//		current_kf_vertex = addVertex(vertex_id, current_pose);
-//		addEdge(edge_id, previous_kf_vertex, current_kf_vertex, edge_con);
-//
-//		vec_keyframe_id.push_back(vertex_id);
-//		vertex_id++;edge_id++;
-//
-//		// backward_kfc
-//		if (kfc_flag)
-//		{
-//			for (int i = 0 ; i < kfc_window ; i++)
-//			{
-//				int target_keyframe_idx = vec_keyframe_id.back();
-//				int current_vertex_idx = vec_keyframe_id.back()-kfc_window+i;
-//
-//				DW_Utility::consolePrint("red", "[backward KFC] ");
-//				cout << "target keyframe idx: " << target_keyframe_idx << " "
-//						"current vertex idx " << current_vertex_idx << endl;
-//
-//				// KFC from ICP
-//				Affine3f backward_kfc_transform;
-//				cuda::Depth current_depth = sliding_vec_depth[i];
-//				cuda::Depth previous_keyframe_depth = vec_depth.back();
-//				estimateTransform(previous_keyframe_depth, current_depth, backward_kfc_transform, LEVELS, p);// original
-//				cout << "KFC from ICP " << backward_kfc_transform.translation() << endl;
-//
-//				// KFC from pose vector
-////				backward_kfc_transform = poses_[current_vertex_idx].inv()*poses_[target_keyframe_idx];
-////				cout << "KFC from pose vector " << backward_kfc_transform.translation() << endl;
-//
-//				Eigen::Isometry3d backward_kfc_edge;
-//				Affine3fToIsometry3d(backward_kfc_transform, backward_kfc_edge);
-//
-//				// current vertex position
-//				Eigen::Isometry3d current_pose;
-//				Affine3fToIsometry3d(poses_[current_vertex_idx],current_pose);
-//
-//				//cout << poses_[current_vertex_idx].translation() << endl;
-//
-//				g2o::OptimizableGraph::Vertex* current_vertex = keyframe_graph_.vertex(current_vertex_idx);
-//				addEdge(edge_id, current_vertex, previous_kf_vertex, backward_kfc_edge);
-//
-//				edge_id++;
-//			}
-//		}
-//
-//		previous_kf_vertex = current_kf_vertex;
-//		pre_keyframe_idx = cur_keyframe_idx;
-//
-////		keyframe_created = true;
-//    }
-//    // forward_kfc, with edge
-//    else if (frame_counter_ - pre_keyframe_idx <= kfc_window && kfc_flag){
-//    	int target_keyframe_idx = pre_keyframe_idx;
-//    	int current_vertex_idx = vertex_id;
-//
-//    	DW_Utility::consolePrint("yellow", "[forward KFC] ");
-//    	cout << "target keyframe idx: " << target_keyframe_idx << " "
-//    			"current vertex idx " << current_vertex_idx << endl;
-//
-//    	// KFC from ICP
-//    	Affine3f forward_kfc_transform;
-//		cuda::Depth current_depth = depth;
-//		cuda::Depth previous_keyframe_depth = vec_depth.back();
-//    	estimateTransform(previous_keyframe_depth, current_depth, forward_kfc_transform, LEVELS, p);
-//    	cout << "KFC from ICP " << forward_kfc_transform.translation() << endl;
-//
-//    	// KFC from pose vector
-////    	forward_kfc_transform = poses_[current_vertex_idx].inv()*poses_[target_keyframe_idx];
-////    	cout << "KFC from pose vector " << forward_kfc_transform.translation() << endl;
-//
-//		Eigen::Isometry3d forward_kfc_edge;
-//		Affine3fToIsometry3d(forward_kfc_transform,forward_kfc_edge);
-//
-//		// current vertex position
-//		Eigen::Isometry3d current_pose;
-//		Affine3fToIsometry3d(poses_.back(),current_pose);
-//
-//		// cout << poses_.back().translation() << endl;
-//
-//		g2o::VertexSE3 *current_vertex = addVertex(current_vertex_idx, current_pose);
-//		addEdge(edge_id, current_vertex, previous_kf_vertex, forward_kfc_edge);
-//
-//		vertex_id++; edge_id++;
-//    }
-//    // forward kfc, vertex only
-//    else
-//    {
-//		// current vertex position
-//		Eigen::Isometry3d current_pose;
-//		Affine3fToIsometry3d(poses_.back(),current_pose);
-//
-//		g2o::VertexSE3 *current_vertex = addVertex(vertex_id, current_pose);
-//
-//		vertex_id++;
-//    }
-//
-//    // loop closure detection
-////    int loop_closure_idx1 = 0;  // be careful!
-////    int loop_closure_idx2 = 100;
-////    if (frame_counter_ == loop_closure_idx2) {
-////		 cout << "[Loop closure is detected.]" << endl;
-////
-////		 Affine3f lcc_transform;
-////		 estimateTransform(depth,vec_depth[loop_closure_idx1/keyframe_interval],lcc_transform, LEVELS, p);
-////
-////		 // cout << loop_closure_transform.translation() << endl;
-////
-////		 Eigen::Isometry3d lc_con;
-////		 Affine3fToIsometry3d(lcc_transform,lc_con);
-////		 addEdge(edge_id, keyframe_graph_.vertex(loop_closure_idx1/keyframe_interval), current_kf_vertex, lc_con);
-////
-////		 edge_id++;
-////         loop_closure_detected = true;
-////    }
-//
-//    // graph optimization
-//	if (loop_closure_detected || keyframe_created) {
-//		cout << endl << "[Graph optimization is triggered.]" << endl;
-//
-//		// incremental PGO
-////		for (int i = 0 ; i < cur_keyframe_idx-2*keyframe_interval ; i++)
-////		{
-////			keyframe_graph_.vertex(i)->setFixed(true);
-////		}
-//
-//		keyframe_graph_.setVerbose(true);
-//		keyframe_graph_.initializeOptimization();
-//		keyframe_graph_.computeInitialGuess();
-//		keyframe_graph_.optimize(2);
-//
-//		clearVolumes();
-//		redrawVolumes(p);
-//
-//		if (kfc_flag)
-//			writeKeyframePosesFromGraph("poses_with_KFC.txt");
-//		else
-//			writeKeyframePosesFromGraph("poses_without_KFC.txt");
-//
-//        loop_closure_detected = false;
-//        keyframe_created = false;
-//		return ++frame_counter_, 0;
-//	}
 
     ///////////////////////////////////////////////////////////////////////////////////////////
     // Volume integration

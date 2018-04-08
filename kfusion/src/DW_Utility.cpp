@@ -33,7 +33,7 @@ namespace DW_Utility {
 		img_rows = atoi(pt.get<std::string>("parameters.img_rows").c_str());
 		focal_length = atoi(pt.get<std::string>("parameters.focal_length").c_str());
 
-		cout << "[Parameters]" << endl;
+		DW_Utility::consolePrint("green", "[Parameters]\n");
 		cout << "GPU_ID : \t" << gpu_id << endl;
 		cout << "Start frame : \t" <<  start_frame << endl;
 		cout << "Dataset dir : \t" <<  dataset_dir << endl;
@@ -138,7 +138,7 @@ namespace DW_Utility {
 
 
 
-	void outputMeshAsPly(const std::string& filename, const cv::viz::Mesh& mesh, const cv::Affine3f last_pose, int file_type)
+	void outputMeshAsPly(const std::string& filename, const cv::viz::Mesh& mesh, int file_type)
 	{
 	    if (file_type == 0){
 	    	std::ofstream stream(filename.c_str());
@@ -162,7 +162,6 @@ namespace DW_Utility {
 	    	char temp[100];
 			for (int i = 0 ; i < mesh.cloud.cols ; i++) {
 				cv::Affine3f::Vec3 point(mesh.cloud.at<float>(4*i),mesh.cloud.at<float>(4*i+1),mesh.cloud.at<float>(4*i+2));
-				point = last_pose*point;
 
 				stream << point(0) << " " << point(1) << " " << point(2) << " ";
 
@@ -201,7 +200,7 @@ namespace DW_Utility {
 				cv::Affine3f::Vec3 point(mesh.cloud.at<float>(4*i),
 										 mesh.cloud.at<float>(4*i+1),
 										 mesh.cloud.at<float>(4*i+2));
-				point = last_pose*point;
+
 				stream.write(reinterpret_cast<const char*>(&point(0)), sizeof(float));
 				stream.write(reinterpret_cast<const char*>(&point(1)), sizeof(float));
 				stream.write(reinterpret_cast<const char*>(&point(2)), sizeof(float));
@@ -219,5 +218,4 @@ namespace DW_Utility {
 			stream.close();
 	    }
 	}
-
 }

@@ -55,5 +55,5 @@ namespace DW_Utility {
 	    string current_timestamp();
 	};
 
-	void outputMeshAsPly(const std::string& filename, const cv::viz::Mesh& mesh, const cv::Affine3f last_pose, int file_type);
+	void outputMeshAsPly(const std::string& filename, const cv::viz::Mesh& mesh, int file_type);
 }
