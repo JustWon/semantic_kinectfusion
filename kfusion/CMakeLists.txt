@@ -6,7 +6,8 @@ set(Includes_srcs
     include/io/bin_grabber.hpp
     include/${module_name}/exports.hpp
     include/${module_name}/kinfu.hpp
-    include/${module_name}/types.hpp)
+    include/${module_name}/types.hpp
+    include/DW_Utility.h)
 
 set(Includes_cuda_srcs
     include/${module_name}/cuda/color_volume.hpp
@@ -33,7 +34,8 @@ set(Source_srcs
     src/precomp.hpp
     src/projective_icp.cpp
     src/safe_call.hpp
-    src/tsdf_volume.cpp)
+    src/tsdf_volume.cpp
+    src/DW_Utility.cpp)
 
 set(Source_cuda_srcs
     src/cuda/color_volume.cu
