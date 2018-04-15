@@ -1,7 +1,7 @@
 #include <DW_Utility.h>
 
 namespace DW_Utility {
-	void consolePrint(std::string color, std::string text)
+	void consolePrint(std::string text, std::string color)
 	{
 		// https://stackoverflow.com/questions/2616906/how-do-i-output-coloured-text-to-a-linux-terminal
 		if (color == "red")
@@ -18,6 +18,8 @@ namespace DW_Utility {
 			cout << "\033[1;36m" << text  << "\033[0m"; 
 		else if (color == "white")
 			cout << "\033[1;37m" << text  << "\033[0m";
+		else
+			cout << text;
 	}
 
 	ConfigParser::ConfigParser(string config_file)
@@ -27,7 +29,7 @@ namespace DW_Utility {
 		gpu_id = atoi(pt.get<std::string>("parameters.gpu_id").c_str());
 		start_frame = atof(pt.get<std::string>("parameters.start_frame").c_str());
 		dataset_dir = pt.get<std::string>("parameters.dataset_dir");
-		magic_factor = atof(pt.get<std::string>("parameters.magic_factor").c_str());
+		scale_factor = atof(pt.get<std::string>("parameters.scale_factor").c_str());
 		volume_size = atof(pt.get<std::string>("parameters.volume_size").c_str());
 		img_cols = atoi(pt.get<std::string>("parameters.img_cols").c_str());
 		img_rows = atoi(pt.get<std::string>("parameters.img_rows").c_str());
@@ -37,7 +39,7 @@ namespace DW_Utility {
 		cout << "GPU_ID : \t" << gpu_id << endl;
 		cout << "Start frame : \t" <<  start_frame << endl;
 		cout << "Dataset dir : \t" <<  dataset_dir << endl;
-		cout << "Magic factor: \t" <<  magic_factor << endl;
+		cout << "Scale factor: \t" <<  scale_factor << endl;
 		cout << "Volume size : \t" <<  volume_size << endl;
 		cout << "Img cols : \t" <<  img_cols << endl;
 		cout << "Img rows : \t" <<  img_rows << endl;
@@ -61,11 +63,11 @@ namespace DW_Utility {
 		return result;
 	}
 
-	SequenceSource::SequenceSource(string _dataset_dir, float _magic_factor, int start_frame)
+	SequenceSource::SequenceSource(string _dataset_dir, float _scale_factor, int start_frame)
 	{
 		dataset_dir = _dataset_dir;
 		asso_file = _dataset_dir + "/associations.txt";
-		magic_factor = _magic_factor;
+		scale_factor = _scale_factor;
 
 		ifstream openFile(asso_file.c_str());
 		if( openFile.is_open() ){
@@ -106,10 +108,11 @@ namespace DW_Utility {
 		// std::cout << semantic_file_name << std::endl;
 
 		depth = cv::imread(depth_file_name, CV_LOAD_IMAGE_ANYDEPTH);
+		cv::Mat depth_float(480,640, CV_32FC1);
 		for (int y = 0 ; y < depth.rows ; y++)
 		for (int x = 0 ; x < depth.cols ; x++)
 		{
-			depth.at<ushort>(y,x) *= magic_factor;
+			depth.at<ushort>(y,x) /= scale_factor;
 		}
 
 		color = cv::imread(color_file_name);

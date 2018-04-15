@@ -13,7 +13,7 @@
 using namespace std;
 
 namespace DW_Utility {
-	void consolePrint(std::string color, std::string text);
+	void consolePrint(std::string text, std::string color="");
 
 	class ConfigParser
 	{
@@ -21,7 +21,7 @@ namespace DW_Utility {
 
 	public:
 		string dataset_dir;
-		double magic_factor;
+		double scale_factor;
 		int seq_n;
 		int idx;
 		int gpu_id;
@@ -43,13 +43,13 @@ namespace DW_Utility {
 	    vector<string> depth_files;
 	    vector<string> semantic_files;
 	    vector<string> timestamps;
-	    float magic_factor;
+	    float scale_factor;
 	    int seq_n;
 	    int idx;
 
 	public:
 	    vector<string> split(const char *str, char c = ' ');
-	    SequenceSource(string _dataset_dir, float _magic_factor, int start_frame);
+	    SequenceSource(string _dataset_dir, float _scale_factor, int start_frame);
 	    bool grab(cv::Mat& depth, cv::Mat& color, cv::Mat& semantic);
 	    void reset();
 	    string current_timestamp();

@@ -110,6 +110,8 @@ namespace kfusion
         void storeSubvolume();
         void storePoseVector();
         void storeTransformedPoseVector();
+        void savePoseGraph(std::string output_filename);
+        void savePoseVector(std::string output_filename);
 
         void saveEstimatedTrajectories();
 
@@ -139,8 +141,9 @@ namespace kfusion
         cv::Ptr<cuda::ProjectiveICP> icp_;
 
         // g2o 
-        g2o::SparseOptimizer keyframe_graph_;
+        g2o::SparseOptimizer pose_graph;
         g2o::VertexSE3 *previous_kf_vertex, *current_kf_vertex;
+        g2o::VertexSE3 *previous_vertex;
         int vertex_id = 0;
         int edge_id = 0;
 

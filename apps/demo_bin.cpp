@@ -38,13 +38,9 @@ struct KinFuApp
 
       if(event.code == 'm')
           kinfu.take_mesh(*kinfu.kinfu_, false);
-      if(event.code == 'M')
-    	  kinfu.take_mesh(*kinfu.kinfu_, true, "mesh/color_mesh " + kinfu.capture_.current_timestamp() + ".ply");
 
       if(event.code == 's')
           kinfu.take_semantic_mesh(*kinfu.kinfu_, false);
-      if(event.code == 'S')
-          kinfu.take_semantic_mesh(*kinfu.kinfu_, true, "mesh/semantic_mesh " + kinfu.capture_.current_timestamp() + ".ply");
   }
 
   KinFuApp(DW_Utility::SequenceSource& source, const KinFuParams& params) : exit_ (false), capture_(source), interactive_mode_(false), pause_(false) {
@@ -122,7 +118,7 @@ struct KinFuApp
    * @brief Run marching cubes on the volume and construct the mesh
    * @param[in] kinfu instance
    */
-  void take_mesh(KinFu& kinfu, bool save_mesh, string mesh_string = "color_mesh.ply", bool last_frame=false, bool transformed=false)
+  void take_mesh(KinFu& kinfu, bool save_mesh, string mesh_string = "color_mesh.ply", bool last_frame=false)
   {
       if (!marching_cubes_)
           marching_cubes_ = cv::Ptr<cuda::MarchingCubes>(new cuda::MarchingCubes());
@@ -156,18 +152,16 @@ struct KinFuApp
 
       if (save_mesh)
       {
-    	  std::thread myThread;
-    	  if (!transformed)
-    		  myThread = std::thread(DW_Utility::outputMeshAsPly, mesh_string, mesh, 1);
+    	  std::thread myThread(DW_Utility::outputMeshAsPly, mesh_string, mesh, 1);
 
-		  if (!last_frame)
-			  myThread.detach();
-		  else // if it is the last frame, we should wait
-			  myThread.join();
+  		  if (!last_frame)
+  			  myThread.detach();
+  		  else // if it is the last frame, we should wait
+  			  myThread.join();
       }
   }
 
-  void take_semantic_mesh(KinFu& kinfu, bool save_mesh, string mesh_string = "semantic_mesh.ply")
+  void take_semantic_mesh(KinFu& kinfu, bool save_mesh, string mesh_string = "semantic_mesh.ply", bool last_frame=false)
   {
       if (!marching_cubes_)
           marching_cubes_ = cv::Ptr<cuda::MarchingCubes>(new cuda::MarchingCubes());
@@ -205,8 +199,15 @@ struct KinFuApp
 		  myThread.detach();
       }
 
-      // cv::imshow("mesh_colors", mesh_colors);
-      // cv::waitKey(0);
+      if (save_mesh)
+      {
+    	  std::thread myThread(DW_Utility::outputMeshAsPly, mesh_string, mesh, 1);
+
+		  if (!last_frame)
+			  myThread.detach();
+		  else // if it is the last frame, we should wait
+			  myThread.join();
+      }
   }
 
   /**
@@ -226,18 +227,23 @@ struct KinFuApp
       {
           if (!capture_.grab(depth, image, semantic))
           {
-        	   DW_Utility::consolePrint("green", "[End of frames]");
-        	   kinfu.saveEstimatedTrajectories();
-               take_mesh(kinfu, true, "mesh/color_mesh [finish].ply", true);
-               return false;
+            DW_Utility::consolePrint("[End of frames]", "green");
+            kinfu.saveEstimatedTrajectories();
+
+            char mesh_file_name[100];
+            sprintf(mesh_file_name, "mesh/fragment_%03d.ply", fragment_number);
+            take_mesh(kinfu, true, mesh_file_name, true);
+            // sprintf(mesh_file_name, "mesh/fragment_semantic_%03d.ply", fragment_number);
+            // take_semantic_mesh(kinfu, true, mesh_file_name, true);
+            return false;
           }
 
           depth_device_.upload(depth.data, depth.step, depth.rows, depth.cols);
           color_device_.upload(image.data, image.step, image.rows, image.cols);
           semantic_device_.upload(semantic.data, semantic.step, semantic.rows, semantic.cols);
 
-		  SampledScopeTime fps(time_ms); (void)fps;
-		  kinfu_return_val = kinfu(depth_device_, color_device_, semantic_device_, capture_.current_timestamp());
+    		  SampledScopeTime fps(time_ms); (void)fps;
+    		  kinfu_return_val = kinfu(depth_device_, color_device_, semantic_device_, capture_.current_timestamp());
 
           // volume save
           if (kinfu_return_val == 1)		// tracking success
@@ -245,19 +251,36 @@ struct KinFuApp
         	  show_raycasted(kinfu);
         	  if (kinfu.getFrameCounter() % 100 == 0)
         	  {
-        		  take_mesh(kinfu, true, "mesh/color_mesh " + capture_.current_timestamp() + "[split].ply");
-//				  kinfu.storeSubvolume();
-//				  kinfu.storePoseVector();
-				  kinfu.reset();
+              char file_name[100];
+              sprintf(file_name, "mesh/fragment_%03d.ply", fragment_number);
+              take_mesh(kinfu, true, file_name, true);
+              // sprintf(file_name, "mesh/fragment_semantic_%03d.ply", fragment_number);
+              // take_semantic_mesh(kinfu, true, file_name, true);
+              sprintf(file_name, "mesh/fragment_optimized_%03d.json", fragment_number);
+        		  // kinfu.savePoseGraph(file_name);
+              kinfu.savePoseVector(file_name);
+
+    				  // kinfu.storeSubvolume();
+    				  // kinfu.storePoseVector();
+              fragment_number++;
+              kinfu.reset();
         	  }
           }
           else if (kinfu_return_val == 2)	// tracking failure,
           {
         	  if (kinfu.getFrameCounter() > 50)	// the number of frame until the failure point should be bigger than 50.
         	  {
-        		  take_mesh(kinfu, true, "mesh/color_mesh " + capture_.current_timestamp() + "[faliure].ply");
-//				  kinfu.storeSubvolume();
-//				  kinfu.storePoseVector();
+        		  char file_name[100];
+              sprintf(file_name, "mesh/fragment_%03d.ply", fragment_number);
+              take_mesh(kinfu, true, file_name, true);
+              // sprintf(file_name, "mesh/fragment_semantic_%03d.ply", fragment_number);
+              // take_semantic_mesh(kinfu, true, file_name, true);
+              sprintf(file_name, "mesh/fragment_optimized_%03d.json", fragment_number);
+              kinfu.savePoseVector(file_name);
+
+        		  // kinfu.storeSubvolume();
+        		  // kinfu.storePoseVector();
+              fragment_number++;
         	  }
         	  kinfu.reset();
           }
@@ -321,7 +344,7 @@ struct KinFuApp
   /**< triangles buffer used in marching cubes */
   cuda::DeviceArray<Point> triangles_buffer_;
 
-  bool model_after_fail = false;
+  int fragment_number = 0;
 };
 
 
@@ -332,7 +355,7 @@ int main (int argc, char* argv[])
 
   if (argc < 2)
   {
-	  DW_Utility::consolePrint("red", "[Error] ");
+	  DW_Utility::consolePrint("[Error] ", "red");
   	  cout << "Config file is necessary." << endl;
   	  exit(0);
   }
@@ -343,14 +366,14 @@ int main (int argc, char* argv[])
   cuda::printShortCudaDeviceInfo (config.gpu_id);
 
   string dataset_dir = config.dataset_dir;
-  float magic_factor = config.magic_factor;
+  float scale_factor = config.scale_factor;
   float volume_size = config.volume_size;
   int img_cols = config.img_cols;
   int img_rows = config.img_rows;
   float focal_length = config.focal_length;
   int start_frame = config.start_frame;
 
-  DW_Utility::SequenceSource capture(dataset_dir, magic_factor, start_frame);
+  DW_Utility::SequenceSource capture(dataset_dir, scale_factor, start_frame);
 
   KinFuParams custom_params = KinFuParams::default_params();
   custom_params.integrate_color = true;
