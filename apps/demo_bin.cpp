@@ -257,8 +257,8 @@ struct KinFuApp
               // sprintf(file_name, "mesh/fragment_semantic_%03d.ply", fragment_number);
               // take_semantic_mesh(kinfu, true, file_name, true);
               sprintf(file_name, "mesh/fragment_optimized_%03d.json", fragment_number);
-        		  // kinfu.savePoseGraph(file_name);
-              kinfu.savePoseVector(file_name);
+        		  kinfu.savePoseGraph(file_name);
+              // kinfu.savePoseVector(file_name);
 
     				  // kinfu.storeSubvolume();
     				  // kinfu.storePoseVector();
@@ -276,7 +276,8 @@ struct KinFuApp
               // sprintf(file_name, "mesh/fragment_semantic_%03d.ply", fragment_number);
               // take_semantic_mesh(kinfu, true, file_name, true);
               sprintf(file_name, "mesh/fragment_optimized_%03d.json", fragment_number);
-              kinfu.savePoseVector(file_name);
+              kinfu.savePoseGraph(file_name);
+              // kinfu.savePoseVector(file_name);
 
         		  // kinfu.storeSubvolume();
         		  // kinfu.storePoseVector();

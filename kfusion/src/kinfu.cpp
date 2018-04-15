@@ -481,20 +481,6 @@ void kfusion::KinFu::storePoseVector()
 	vec_poses.push_back(this->poses_);
 }
 
-void kfusion::KinFu::storeTransformedPoseVector()
-{
-	Affine3f last_pose = getLastSucessPose();
-	cout << "last_pose : " << last_pose.translation() << endl;
-//	std::vector<Affine3f> poses_temp;
-
-	for (int i = 0 ; i < poses_.size() ; i++)
-	{
-		poses_[i] = last_pose*poses_[i];
-	}
-
-	vec_poses.push_back(poses_);
-}
-
 std::string padding(std::string value)
 {
 	return "padding" + value + "padding";
@@ -509,7 +495,7 @@ std::string padding(double value)
 
 void kfusion::KinFu::savePoseVector(std::string output_filename)
 {
-    DW_Utility::consolePrint("[savePoseGraph] \n", "green");
+    DW_Utility::consolePrint("[savePoseVector] \n", "green");
 
     // sort(pose_graph.edges().begin(), pose_graph.edges().end(), IncrementalEdgesCompare());
 
@@ -617,9 +603,9 @@ void kfusion::KinFu::savePoseVector(std::string output_filename)
         ptree value;
 
         {
-            // rot(0);-rot(1);-rot(2);trans(0);
-            // -rot(3);rot(4);-rot(5);trans(1);
-            // -rot(6);-rot(7);rot(8);trans(2);
+            // rot(0);rot(1);rot(2);trans(0);
+            // rot(3);rot(4);rot(5);trans(1);
+            // rot(6);rot(7);rot(8);trans(2);
             // 0; 0; 0; 1
 
             // cout << node_pose.rotation()(6) << endl;
@@ -695,8 +681,6 @@ void kfusion::KinFu::savePoseGraph(std::string output_filename)
 {
 	DW_Utility::consolePrint("[savePoseGraph] \n", "green");
 
-	// sort(pose_graph.edges().begin(), pose_graph.edges().end(), IncrementalEdgesCompare());
-
 	using boost::property_tree::ptree;
 
 	ptree posegraph;
@@ -735,23 +719,23 @@ void kfusion::KinFu::savePoseGraph(std::string output_filename)
 
 			value.put("", padding((rot(0))));
 			transformation_node.push_back(std::make_pair("", value));
-			value.put("", padding((-rot(3))));
+			value.put("", padding((rot(3))));
 			transformation_node.push_back(std::make_pair("", value));
-			value.put("", padding((-rot(6))));
+			value.put("", padding((rot(6))));
 			transformation_node.push_back(std::make_pair("", value));
 			value.put("", padding((0.0)));
 			transformation_node.push_back(std::make_pair("", value));
-			value.put("", padding((-rot(1))));
+			value.put("", padding((rot(1))));
 			transformation_node.push_back(std::make_pair("", value));
 			value.put("", padding((rot(4))));
 			transformation_node.push_back(std::make_pair("", value));
-			value.put("", padding((-rot(7))));
+			value.put("", padding((rot(7))));
 			transformation_node.push_back(std::make_pair("", value));
 			value.put("", padding((0.0)));
 			transformation_node.push_back(std::make_pair("", value));
-			value.put("", padding((-rot(2))));
+			value.put("", padding((rot(2))));
 			transformation_node.push_back(std::make_pair("", value));
-			value.put("", padding((-rot(5))));
+			value.put("", padding((rot(5))));
 			transformation_node.push_back(std::make_pair("", value));
 			value.put("", padding((rot(8))));
 			transformation_node.push_back(std::make_pair("", value));
@@ -793,51 +777,65 @@ void kfusion::KinFu::savePoseGraph(std::string output_filename)
 		double esti[10] = {0,};
 		pose_graph.vertex(i)->getEstimateData(esti);
 		cv::Affine3f::Vec3 trans(esti[0],esti[1],esti[2]);
-		Eigen::Matrix3d rot = Quaternion(esti[6],esti[3],esti[4],esti[5]).toRotationMatrix();
+		Eigen::Matrix3d rot = Quaternion(esti[6],esti[3],esti[4],esti[5]).toRotationMatrix().inverse();
+
+
+        Eigen::Isometry3d node_pose;
+        Affine3fToIsometry3d(poses_[i],node_pose);
 
 		ptree posegraphnode;
 		ptree transformation_node;
 		ptree value;
 
 		{
-            // rot(0);-rot(1);-rot(2);trans(0);
-            // -rot(3);rot(4);-rot(5);trans(1);
-            // -rot(6);-rot(7);rot(8);trans(2);
+            // rot(0);rot(1);rot(2);trans(0);
+            // rot(3);rot(4);rot(5);trans(1);
+            // rot(6);rot(7);rot(8);trans(2);
             // 0; 0; 0; 1
 
 			value.put("", padding((rot(0))));
 			transformation_node.push_back(std::make_pair("", value));
-			value.put("", padding((-rot(3))));
+			value.put("", padding((rot(3))));
 			transformation_node.push_back(std::make_pair("", value));
-			value.put("", padding((-rot(6))));
+			value.put("", padding((rot(6))));
 			transformation_node.push_back(std::make_pair("", value));
 			value.put("", padding((0.0)));
 			transformation_node.push_back(std::make_pair("", value));
-			value.put("", padding((-rot(1))));
+			value.put("", padding((rot(1))));
 			transformation_node.push_back(std::make_pair("", value));
 			value.put("", padding((rot(4))));
 			transformation_node.push_back(std::make_pair("", value));
-			value.put("", padding((-rot(7))));
+			value.put("", padding((rot(7))));
 			transformation_node.push_back(std::make_pair("", value));
 			value.put("", padding((0.0)));
 			transformation_node.push_back(std::make_pair("", value));
-			value.put("", padding((-rot(2))));
+			value.put("", padding((rot(2))));
 			transformation_node.push_back(std::make_pair("", value));
-			value.put("", padding((-rot(5))));
+			value.put("", padding((rot(5))));
 			transformation_node.push_back(std::make_pair("", value));
 			value.put("", padding((rot(8))));
 			transformation_node.push_back(std::make_pair("", value));
 			value.put("", padding((0.0)));
 			transformation_node.push_back(std::make_pair("", value));
-			value.put("", padding((trans(0))));
-			transformation_node.push_back(std::make_pair("", value));
-			value.put("", padding((trans(1))));
-			transformation_node.push_back(std::make_pair("", value));
-			value.put("", padding((trans(2))));
-			transformation_node.push_back(std::make_pair("", value));
-			value.put("", padding((1.0)));
-			transformation_node.push_back(std::make_pair("", value));
-			
+
+
+			// value.put("", padding((node_pose.translation()(0))));
+			// transformation_node.push_back(std::make_pair("", value));
+			// value.put("", padding((node_pose.translation()(1))));
+			// transformation_node.push_back(std::make_pair("", value));
+			// value.put("", padding((node_pose.translation()(2))));
+			// transformation_node.push_back(std::make_pair("", value));
+			// value.put("", padding((1.0)));
+			// transformation_node.push_back(std::make_pair("", value));
+
+            value.put("", padding(trans(0)));
+            transformation_node.push_back(std::make_pair("", value));
+            value.put("", padding(trans(1)));
+            transformation_node.push_back(std::make_pair("", value));
+            value.put("", padding(trans(2)));
+            transformation_node.push_back(std::make_pair("", value));
+            value.put("", padding(1.0));
+            transformation_node.push_back(std::make_pair("", value));
 		}
 
 		posegraphnode.put("class_name", "PoseGraphNode");
@@ -957,8 +955,7 @@ int kfusion::KinFu::operator()(const kfusion::cuda::Depth& depth, const kfusion:
 		Affine3fToIsometry3d(affine,edge_odom);
 
 		Eigen::Isometry3d node_pose;
-        // Affine3fToIsometry3d(poses_.back(),node_pose);
-        Affine3fToIsometry3d(poses_.back().inv(),node_pose);
+        Affine3fToIsometry3d(poses_.back(),node_pose);
 
         // cout << setprecision(10);
         // cout << node_pose.rotation() << endl;

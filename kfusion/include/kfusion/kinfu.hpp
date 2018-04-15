@@ -109,7 +109,6 @@ namespace kfusion
 
         void storeSubvolume();
         void storePoseVector();
-        void storeTransformedPoseVector();
         void savePoseGraph(std::string output_filename);
         void savePoseVector(std::string output_filename);
 
